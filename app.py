@@ -1,18 +1,43 @@
 # app.py
-# Streamlit-based 4-Week Strength & Conditioning Tracker with Pages and Guide
+# Streamlit 4-Week Strength & Conditioning Tracker
+# Mobile-friendly with full functionality
 
 import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
 
-# --- Database & Migration Setup ---
+# --- Page Config & Styles ---
+st.set_page_config(
+    page_title="4-Week Program Tracker",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+# CSS tweaks for mobile
+st.markdown(
+    """
+<style>
+/* Touch targets */
+div[data-testid="stExpander"] > .stExpanderHeader {
+    padding: 12px 8px !important;
+}
+button {
+    padding: 12px !important;
+    width: 100% !important;
+}
+input, .stSlider > div {
+    padding: 8px 4px !important;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# --- Database Setup & Migration ---
 conn = sqlite3.connect("workout_tracker.db", check_same_thread=False)
 c = conn.cursor()
-
-# Ensure tables exist
-c.execute("""
-CREATE TABLE IF NOT EXISTS resistance(
+# Create or alter resistance table
+c.execute("""CREATE TABLE IF NOT EXISTS resistance(
     id INTEGER PRIMARY KEY,
     date TEXT,
     week INTEGER,
@@ -23,42 +48,43 @@ CREATE TABLE IF NOT EXISTS resistance(
     actual_weight REAL,
     actual_reps INTEGER,
     rir INTEGER
-)
-""")
-c.execute("""
-CREATE TABLE IF NOT EXISTS mobility(
+)""")
+# Ensure set_number column exists
+cols = [row[1] for row in c.execute("PRAGMA table_info(resistance)").fetchall()]
+if "set_number" not in cols:
+    c.execute("ALTER TABLE resistance ADD COLUMN set_number INTEGER DEFAULT 1")
+# Mobility table
+c.execute("""CREATE TABLE IF NOT EXISTS mobility(
     id INTEGER PRIMARY KEY,
     date TEXT,
     prep_done INTEGER,
     joint_flow_done INTEGER,
     animal_circuit_done INTEGER,
     cuff_finisher_done INTEGER
-)
-""")
-c.execute("""
-CREATE TABLE IF NOT EXISTS cardio(
+)""")
+# Cardio table
+c.execute("""CREATE TABLE IF NOT EXISTS cardio(
     id INTEGER PRIMARY KEY,
     date TEXT,
     type TEXT,
     duration_min INTEGER,
     avg_hr INTEGER
-)
-""")
+)""")
 conn.commit()
 
-# Program Definitions
+# --- Program Definitions ---
 weekly_resistance = {
     "Monday": [
-        {"exercise": "Back-squat", "target": "1×4 @ 88% 1RM + 3×6 @ 78% 1RM"},
+        {"exercise": "Back-squat", "target": "1×4 @88% + 3×6 @78%"},
         {"exercise": "Hip-thrust", "target": "4×8"},
     ],
     "Tuesday": [
-        {"exercise": "Bench Press", "target": "1×4 @ 88% 1RM + 3×6 @ 78% 1RM"},
+        {"exercise": "Bench Press", "target": "1×4 @88% + 3×6 @78%"},
         {"exercise": "Overhead Press", "target": "3×6"},
         {"exercise": "Dips", "target": "3×10"},
     ],
     "Thursday AM": [
-        {"exercise": "Deadlift", "target": "1×3 @ 90% 1RM + 3×6 @ 80% 1RM"},
+        {"exercise": "Deadlift", "target": "1×3 @90% + 3×6 @80%"},
         {"exercise": "Romanian Deadlift", "target": "3×8"},
     ],
     "Friday": [
@@ -68,225 +94,173 @@ weekly_resistance = {
 }
 
 
-# Helper: load tables
+# --- Helpers ---
 @st.cache_data
-def load_table(table):
-    return pd.read_sql_query(f"SELECT * FROM {table} ORDER BY date DESC", conn)
+def load_table(name):
+    return pd.read_sql_query(f"SELECT * FROM {name} ORDER BY date DESC", conn)
 
 
-# App Layout
-st.title("4-Week Strength & Conditioning Program")
-page = st.sidebar.radio(
-    "Page", ["Guide", "Resistance", "Mobility", "Cardio", "Logs & Charts"]
-)
+@st.cache_data
+def fetch_last(exercise, set_num):
+    df = pd.read_sql_query(
+        "SELECT actual_weight, actual_reps, rir FROM resistance WHERE exercise=? AND set_number=? ORDER BY date DESC LIMIT 1",
+        conn,
+        params=(exercise, set_num),
+    )
+    if not df.empty:
+        r = df.iloc[0]
+        return float(r["actual_weight"]), int(r["actual_reps"]), int(r["rir"])
+    return None, None, None
 
-# --- Guide Page ---
-if page == "Guide":
-    st.header("📖 Program Guide")
-    # Framework
-    with st.expander("1. Resistance-Training Framework", expanded=True):
+
+# --- Main Application with Tabs ---
+tabs = st.tabs(["Guide", "Resistance", "Mobility", "Cardio", "Logs"])
+
+# Guide Tab
+with tabs[0]:
+    st.header("📖 4-Week Program Guide")
+    with st.expander("1. Resistance Framework", True):
         st.markdown(
             """
-**Max-strength**
+**Max-strength:** ≥85% 1RM · 1–5 reps · 5–10 sets/ex · 2–5 min rest
 
-- **Target:** ≥ 85% 1 RM · 1–5 reps  
-- **Weekly Hard Sets:** 5–10 sets per exercise  
-- **Rest:** 2–5 min
+**Hypertrophy:** 60–80% 1RM · 6–12 reps · 10–20 sets/muscle · 1–2 min rest
 
-**Hypertrophy/Body-Composition**
-
-- **Target:** 60–80% 1 RM · 6–12 reps  
-- **Weekly Hard Sets:** 10–20 sets per muscle  
-- **Rest:** 1–2 min
+_Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly sets.
 """
         )
-        st.markdown(
-            "**Template Tweaks:** adding one top set at 87–90% 1 RM to existing 3×6 @75–82% and raising accessory volume to hit 12–16 weekly sets."
-        )
-    # Weekly Template
-    with st.expander("2. Weekly Template", expanded=False):
+    with st.expander("2. Weekly Template"):
         st.table(
             pd.DataFrame(
                 [
-                    [
-                        "Mon",
-                        "Back‑squat: 1×4 @88% → 3×6 @78%",
-                        "Mini‑band glute activation",
-                    ],
-                    [
-                        "Tue",
-                        "Bench: 1×4 @88% → 3×6 @78% · OHP 3×6 · Dips 3×10",
-                        "Shoulder ER warm‑up",
-                    ],
-                    [
-                        "Wed",
-                        "Mobility Flow (§5)",
-                        "Dynamic only; skip static stretching",
-                    ],
-                    ["Thu AM", "Deadlift: 1×3 @90% → 3×6 @80% · RDL 3×8", ""],
-                    ["Thu PM", "HIIT 4×4 @85–95% HRmax (3 min @70%)", "↑VO₂max"],
-                    [
-                        "Fri",
-                        "Pull‑up 3×6–8 · Row 3×10",
-                        "Band ER @90° 2×12 + prone Y 2×15",
-                    ],
-                    ["Sat", "Zone‑2 Run 40–45 min (~70% HRmax)", ""],
-                    ["Sun", "Rest + short mobility", ""],
+                    ["Mon", "Back-squat; Hip-thrust", "Mini-band"],
+                    ["Tue", "Bench; OHP; Dips", "Shoulder ER"],
+                    ["Wed", "Mobility Flow", "Dynamic only"],
+                    ["Thu AM", "Deadlift; RDL", ""],
+                    ["Thu PM", "HIIT 4×4", "VO₂-max"],
+                    ["Fri", "Pull-up; Row", "Cuff"],
+                    ["Sat", "Zone-2 Run", ""],
+                    ["Sun", "Rest + Mobility", ""],
                 ],
                 columns=["Day", "Main Work", "Notes"],
             )
         )
-    # Warm-up & Failure Rules
     with st.expander("3. Warm-up & Failure Rules"):
         st.markdown(
             """
-- **Dynamic Warm-ups:** one or two ramp sets per lift.  
-- **Static Stretching:** optional, avoid pre-lift.  
-- **Failure Rule:** stop 3–4 reps shy on compounds; isolate moves to near failure if desired.
+- Dynamic only; 1–2 ramp sets.
+- Skip static pre-lift.
+- Stop 3–4 reps shy on compounds.
 """
         )
-    # Cardio Tweaks
     with st.expander("4. Cardio Tweaks"):
         st.markdown(
             """
-| Type       | Prescription                         | Rationale                                   |
-|------------|--------------------------------------|---------------------------------------------|
-| **HIIT**   | 4×4 or 10 min protocol; 2:1 work-rest| +3.5 mL·kg⁻¹·min⁻¹ VO₂ₘₐₓ vs. sprints         |
-| **Endurance**| ≥60 min easy or two 30–45 min bouts | Preserves mitochondria & compliance         |
+- **HIIT:** 4×4 or 10-min @90% HRₘₐₓ
+- **Endurance:** ≥60min Z2
 """
         )
-    # Mobility Flow
     with st.expander("5. Mobility Flow"):
-        st.markdown(
-            """
-**Prep (3 min):** box‑breathing, Cat/Cow ×8, shoulder CARs ×5/side  
-**Joint-Flow (10 min):** WGS ×5/side, Down‑Dog↔Cobra ×6, Lizard 30 s/side, Pigeon CR ×3, Deep‑squat stretch 60 s  
-**Animal Circuit (3 rnd):** Beast, Ape, Scorpion, Crab, Side Kick‑Through (40 s on/20 s rest)  
-**Cuff Finisher:** band ER 2×20 + prone Y 2×15
-"""
-        )
-    # Nutrition & Why
+        st.markdown("Prep, Joint, Animal, Cuff circuits as outlined.")
     with st.expander("6. Nutrition & Rationale"):
-        col1, col2 = st.columns(2)
-        with col1:
+        c1, c2 = st.columns(2)
+        with c1:
             st.markdown(
-                """
-**Protein:** 1.6–2.2 g/kg/day  
-**Creatine:** 3–5 g/day  
-**Omega‑3:** 3 g EPA +2 g DHA load, then 2 g/day
-"""
+                "**Protein:** 1.6–2.2 g/kg/day<br>**Creatine:** 3–5 g/day<br>**Omega-3:** load 3 g EPA+2 g DHA → 2 g/day",
+                unsafe_allow_html=True,
             )
-        with col2:
+        with c2:
             st.markdown(
-                """
-**Energy:** 10–15% kcal deficit for recomp  
-**Sleep:** 7–9 h/night  
-**Why:** heavier top sets +75–82% volume hit strength & hypertrophy sweet spots
-"""
+                "**Energy:** 10–15% deficit<br>**Sleep:** 7–9 h/night<br>**Why:** top sets + volume hit strength & hypertrophy",
+                unsafe_allow_html=True,
             )
 
-# --- Resistance Page ---
-elif page == "Resistance":
-    st.header("Log Resistance")
-    d = st.date_input("Date", date.today(), key="res_date")
-    week = st.selectbox("Week Number", [1, 2, 3, 4], key="res_week")
-    day = st.selectbox("Day", list(weekly_resistance.keys()), key="res_day")
-    ex_list = [item["exercise"] for item in weekly_resistance[day]]
-    exercise = st.selectbox("Exercise", ex_list, key="res_exercise")
-    target = next(
-        item["target"]
-        for item in weekly_resistance[day]
-        if item["exercise"] == exercise
-    )
-    num_sets = st.number_input(
-        "# of sets", min_value=1, max_value=10, value=3, key="res_sets"
-    )
-    entries = []
-    for set_num in range(1, num_sets + 1):
-        st.markdown(f"**Set {set_num}**")
-        aw = st.number_input(
-            "Weight (kg)", min_value=0.0, step=0.5, key=f"res_w_{set_num}"
+# Resistance Tab
+with tabs[1]:
+    st.header("🏋️ Resistance")
+    c1, c2 = st.columns(2)
+    with c1:
+        d = st.date_input("Date", date.today())
+        week = st.selectbox("Week", [1, 2, 3, 4])
+        day = st.selectbox("Day", list(weekly_resistance.keys()))
+        ex = st.selectbox("Exercise", [e["exercise"] for e in weekly_resistance[day]])
+    with c2:
+        target = next(
+            e["target"] for e in weekly_resistance[day] if e["exercise"] == ex
         )
-        ar = st.number_input("Reps", min_value=1, max_value=50, key=f"res_r_{set_num}")
-        rir = st.slider("RIR", 0, 5, 3, key=f"res_i_{set_num}")
-        entries.append((d, week, day, exercise, set_num, target, aw, ar, rir))
+        repeat = st.checkbox("Repeat last session")
+        sets = st.number_input("# Sets", 1, 10, 3)
+    entries = []
+    pw, pr, pi = None, None, None
+    for i in range(1, sets + 1):
+        with st.expander(f"Set {i}"):
+            if repeat:
+                w0, r0, i0 = fetch_last(ex, i)
+            else:
+                w0, r0, i0 = pw, pr, pi
+            maxw = float((w0 or 0) * 1.2 + 5)
+            aw = st.slider(
+                "Weight (kg)", 0.0, maxw, float(w0 or 0), step=0.5, key=f"res_w_{i}"
+            )
+            ar = st.slider("Reps", 1, 20, int(r0 or 6), key=f"res_r_{i}")
+            rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
+            pw, pr, pi = aw, ar, rir
+            entries.append((d, week, day, ex, i, target, aw, ar, rir))
     if st.button("Save Resistance"):
         c.executemany(
-            "INSERT INTO resistance(date, week, day, exercise, set_number, target, actual_weight, actual_reps, rir) VALUES (?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO resistance(date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?)",
             entries,
         )
         conn.commit()
-        st.success("Resistance logged")
+        st.success("Saved Resistance")
 
-# --- Mobility Page ---
-elif page == "Mobility":
-    st.header("Mobility Check-In")
+# Mobility Tab
+with tabs[2]:
+    st.header("🤸 Mobility")
     d = st.date_input("Date", date.today(), key="mob_date")
-    st.markdown("- **Prep:** Box breathing, Cat/Cow, Shoulder CARs")
-    prep = st.checkbox("Completed Prep", key="mob_prep")
-    st.markdown("- **Joint Flow:** WGS, Down-Dog ↔ Cobra, Lizard, Pigeon, Deep Squat")
-    joint = st.checkbox("Completed Joint Flow", key="mob_joint")
-    st.markdown(
-        "- **Animal Circuit:** Loaded Beast, Ape Reach, Scorpion, Crab Reach, Side Kick-Through"
-    )
-    animal = st.checkbox("Completed Animal Circuit", key="mob_animal")
-    st.markdown("- **Cuff Finisher:** Band ER, Prone Y")
-    cuff = st.checkbox("Completed Cuff Finisher", key="mob_cuff")
-    if st.button("Save Mobility Check-In"):
+    p = st.checkbox("Prep (Box breathing, Cat/Cow, CARs)")
+    j = st.checkbox("Joint Flow (WGS, Down-Dog↔Cobra, Lizard, Pigeon)")
+    a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
+    cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
+    if st.button("Save Mobility"):
         c.execute(
-            "INSERT INTO mobility(date, prep_done, joint_flow_done, animal_circuit_done, cuff_finisher_done) VALUES (?,?,?,?,?)",
-            (d, int(prep), int(joint), int(animal), int(cuff)),
+            "INSERT INTO mobility(date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?)",
+            (d, int(p), int(j), int(a), int(cf)),
         )
         conn.commit()
-        st.success("Mobility check-in saved")
+        st.success("Saved Mobility")
 
-# --- Cardio Page ---
-elif page == "Cardio":
-    st.header("Log Cardio")
-    d = st.date_input("Date", date.today(), key="cardio_date")
-    ctype = st.selectbox(
-        "Type", ["HIIT (4×4)", "10-min HIIT", "Zone-2 Run", "Other"], key="cardio_type"
+# Cardio Tab
+with tabs[3]:
+    st.header("🏃 Cardio")
+    d = st.date_input("Date", date.today(), key="car_date")
+    t = st.selectbox(
+        "Type", ["HIIT (4×4)", "10-min HIIT", "Zone-2 Run", "Other"], key="car_type"
     )
-    duration = st.number_input(
-        "Duration (minutes)",
-        min_value=1,
-        max_value=180,
-        value=30,
-        step=1,
-        key="cardio_dur",
-    )
-    avg_hr = st.number_input(
-        "Average Heart Rate (bpm)",
-        min_value=30,
-        max_value=220,
-        value=120,
-        step=1,
-        key="cardio_hr",
-    )
+    dcol, hcol = st.columns(2)
+    dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
+    hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
     if st.button("Save Cardio"):
         c.execute(
-            "INSERT INTO cardio(date, type, duration_min, avg_hr) VALUES (?,?,?,?)",
-            (d, ctype, duration, avg_hr),
+            "INSERT INTO cardio(date,type,duration_min,avg_hr) VALUES(?,?,?,?)",
+            (d, t, dur, hr),
         )
         conn.commit()
-        st.success("Cardio logged")
+        st.success("Saved Cardio")
 
-# --- Logs & Charts Page ---
-elif page == "Logs & Charts":
-    st.header("Resistance Logs")
-    df_res = load_table("resistance")
-    st.dataframe(df_res)
-    st.header("Mobility Logs")
-    df_mob = load_table("mobility")
-    st.dataframe(df_mob)
-    st.header("Cardio Logs")
-    df_card = load_table("cardio")
-    st.dataframe(df_card)
-    st.header("Progress Charts")
-    for lift in df_res["exercise"].unique():
-        df_l = df_res[df_res["exercise"] == lift]
-        if not df_l.empty:
-            df_l["date"] = pd.to_datetime(df_l["date"])
-            df_plot = df_l.groupby("date")["actual_weight"].max().sort_index()
-            st.line_chart(df_plot, height=200, use_container_width=True)
-            st.write(f"{lift} max weight over time")
+# Logs Tab
+with tabs[4]:
+    st.header("📊 Logs")
+    st.subheader("Resistance")
+    st.dataframe(load_table("resistance"))
+    st.subheader("Mobility")
+    st.dataframe(load_table("mobility"))
+    st.subheader("Cardio")
+    st.dataframe(load_table("cardio"))
+    st.subheader("Progress Charts")
+    df = load_table("resistance")
+    for lift in df["exercise"].unique():
+        ddf = df[df["exercise"] == lift]
+        ddf["date"] = pd.to_datetime(ddf["date"])
+        chart = ddf.groupby("date")["actual_weight"].max().sort_index()
+        st.line_chart(chart, use_container_width=True, height=200)
