@@ -335,7 +335,8 @@ def show_login_signup_forms():
 # --- Main Application Logic ---
 if not st.session_state.get("logged_in", False):  # Use .get for safety
     show_login_signup_forms()
-    st.info("Please log in or sign up using the sidebar to access the app.")
+    st.title("Welcome to the 4-Week Program Tracker!")
+    st.markdown("Please log in or sign up using the sidebar to access your personalized workout tracking.")
 else:
     st.sidebar.markdown(f"Logged in as **{st.session_state.username}**")
     if st.sidebar.button("Logout"):
