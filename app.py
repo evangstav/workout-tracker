@@ -273,62 +273,62 @@ else:
 
     # Guide Tab (No user-specific data, can remain as is)
     with tabs[0]:
-    st.header("📖 4-Week Program Guide")
-    with st.expander("1. Resistance Framework", True):
-        st.markdown(
-            """
+        st.header("📖 4-Week Program Guide")
+        with st.expander("1. Resistance Framework", True):
+            st.markdown(
+                """
 **Max-strength:** ≥85% 1RM · 1–5 reps · 5–10 sets/ex · 2–5 min rest
 
 **Hypertrophy:** 60–80% 1RM · 6–12 reps · 10–20 sets/muscle · 1–2 min rest
 
 _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly sets.
 """
-        )
-    with st.expander("2. Weekly Template"):
-        st.table(
-            pd.DataFrame(
-                [
-                    ["Mon", "Back-squat; Hip-thrust", "Mini-band"],
-                    ["Tue", "Bench; OHP; Dips", "Shoulder ER"],
-                    ["Wed", "Mobility Flow", "Dynamic only"],
-                    ["Thu AM", "Deadlift; RDL", ""],
-                    ["Thu PM", "HIIT 4×4", "VO₂-max"],
-                    ["Fri", "Pull-up; Row", "Cuff"],
-                    ["Sat", "Zone-2 Run", ""],
-                    ["Sun", "Rest + Mobility", ""],
-                ],
-                columns=["Day", "Main Work", "Notes"],
             )
-        )
-    with st.expander("3. Warm-up & Failure Rules"):
-        st.markdown(
-            """
+        with st.expander("2. Weekly Template"):
+            st.table(
+                pd.DataFrame(
+                    [
+                        ["Mon", "Back-squat; Hip-thrust", "Mini-band"],
+                        ["Tue", "Bench; OHP; Dips", "Shoulder ER"],
+                        ["Wed", "Mobility Flow", "Dynamic only"],
+                        ["Thu AM", "Deadlift; RDL", ""],
+                        ["Thu PM", "HIIT 4×4", "VO₂-max"],
+                        ["Fri", "Pull-up; Row", "Cuff"],
+                        ["Sat", "Zone-2 Run", ""],
+                        ["Sun", "Rest + Mobility", ""],
+                    ],
+                    columns=["Day", "Main Work", "Notes"],
+                )
+            )
+        with st.expander("3. Warm-up & Failure Rules"):
+            st.markdown(
+                """
 - Dynamic only; 1–2 ramp sets.
 - Skip static pre-lift.
 - Stop 3–4 reps shy on compounds.
 """
-        )
-    with st.expander("4. Cardio Tweaks"):
-        st.markdown(
-            """
+            )
+        with st.expander("4. Cardio Tweaks"):
+            st.markdown(
+                """
 - **HIIT:** 4×4 or 10-min @90% HRₘₐₓ
 - **Endurance:** ≥60min Z2
 """
-        )
-    with st.expander("5. Mobility Flow"):
-        st.markdown("Prep, Joint, Animal, Cuff circuits as outlined.")
-    with st.expander("6. Nutrition & Rationale"):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown(
-                "**Protein:** 1.6–2.2 g/kg/day<br>**Creatine:** 3–5 g/day<br>**Omega-3:** load 3 g EPA+2 g DHA → 2 g/day",
-                unsafe_allow_html=True,
             )
-        with c2:
-            st.markdown(
-                "**Energy:** 10–15% deficit<br>**Sleep:** 7–9 h/night<br>**Why:** top sets + volume hit strength & hypertrophy",
-                unsafe_allow_html=True,
-            )
+        with st.expander("5. Mobility Flow"):
+            st.markdown("Prep, Joint, Animal, Cuff circuits as outlined.")
+        with st.expander("6. Nutrition & Rationale"):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown(
+                    "**Protein:** 1.6–2.2 g/kg/day<br>**Creatine:** 3–5 g/day<br>**Omega-3:** load 3 g EPA+2 g DHA → 2 g/day",
+                    unsafe_allow_html=True,
+                )
+            with c2:
+                st.markdown(
+                    "**Energy:** 10–15% deficit<br>**Sleep:** 7–9 h/night<br>**Why:** top sets + volume hit strength & hypertrophy",
+                    unsafe_allow_html=True,
+                )
 
 # Resistance Tab
 with tabs[1]:
@@ -457,6 +457,3 @@ with tabs[4]:
                     st.line_chart(chart_data, use_container_width=True, height=200)
         else:
             st.write("No resistance data yet to display charts.")
-        ddf["date"] = pd.to_datetime(ddf["date"])
-        chart = ddf.groupby("date")["actual_weight"].max().sort_index()
-        st.line_chart(chart, use_container_width=True, height=200)
