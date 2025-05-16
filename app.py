@@ -407,121 +407,121 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                     unsafe_allow_html=True,
                 )
 
-# Resistance Tab
-with tabs[1]:
-    st.header("🏋️ Resistance")
-    c1, c2 = st.columns(2)
-    with c1:
-        d = st.date_input("Date", date.today())
-        week = st.selectbox("Week", [1, 2, 3, 4])
-        day = st.selectbox("Day", list(weekly_resistance.keys()))
-        ex = st.selectbox("Exercise", [e["exercise"] for e in weekly_resistance[day]])
-    with c2:
-        target = next(
-            e["target"] for e in weekly_resistance[day] if e["exercise"] == ex
-        )
-        repeat = st.checkbox("Repeat last session")
-        sets = st.number_input("# Sets", 1, 10, 3)
-    entries = []
-    pw, pr, pi = None, None, None
-    current_user_id = st.session_state.user_id  # Get current user's ID
-    for i in range(1, sets + 1):
-        with st.expander(f"Set {i}"):
-            if repeat:
-                w0, r0, i0 = fetch_last(ex, i, current_user_id)
-            else:
-                w0, r0, i0 = pw, pr, pi
-            maxw = float(150)
-            aw = st.slider(
-                "Weight (kg)", 0.0, maxw, float(w0 or 0), step=0.5, key=f"res_w_{i}"
+    # Resistance Tab
+    with tabs[1]:
+        st.header("🏋️ Resistance")
+        c1, c2 = st.columns(2)
+        with c1:
+            d = st.date_input("Date", date.today())
+            week = st.selectbox("Week", [1, 2, 3, 4])
+            day = st.selectbox("Day", list(weekly_resistance.keys()))
+            ex = st.selectbox("Exercise", [e["exercise"] for e in weekly_resistance[day]])
+        with c2:
+            target = next(
+                e["target"] for e in weekly_resistance[day] if e["exercise"] == ex
             )
-            ar = st.slider("Reps", 1, 20, int(r0 or 6), key=f"res_r_{i}")
-            rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
-            pw, pr, pi = aw, ar, rir
-            # Add user_id to the entry
-            entries.append((current_user_id, d, week, day, ex, i, target, aw, ar, rir))
-    if st.button("Save Resistance"):
-        # The 'if not entries' check is specific and remains here.
-        # The user login check is handled by _save_form_data.
-        if not entries:  # pragma: no cover
-            st.warning("No sets to save.")
-        else:
-            _save_form_data(
-                insert_query="INSERT INTO resistance(user_id,date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                data_payload=entries,
-                success_message="Saved Resistance",
-                is_many=True,
-            )
-
-# Mobility Tab
-with tabs[2]:
-    st.header("🤸 Mobility")
-    d = st.date_input("Date", date.today(), key="mob_date")
-    p = st.checkbox("Prep (Box breathing, Cat/Cow, CARs)")
-    j = st.checkbox("Joint Flow (WGS, Down-Dog↔Cobra, Lizard, Pigeon)")
-    a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
-    cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
-    if st.button("Save Mobility"):
-        current_user_id = st.session_state.user_id  # Needed to construct data_payload
-        # User login check is handled by _save_form_data.
-        data_payload = (current_user_id, d, int(p), int(j), int(a), int(cf))
-        _save_form_data(
-            insert_query="INSERT INTO mobility(user_id,date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?,?)",
-            data_payload=data_payload,
-            success_message="Saved Mobility",
-        )
-
-# Cardio Tab
-with tabs[3]:
-    st.header("🏃 Cardio")
-    d = st.date_input("Date", date.today(), key="car_date")
-    t = st.selectbox(
-        "Type", ["HIIT (4×4)", "10-min HIIT", "Zone-2 Run", "Other"], key="car_type"
-    )
-    dcol, hcol = st.columns(2)
-    dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
-    hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
-    if st.button("Save Cardio"):
-        current_user_id = st.session_state.user_id  # Needed to construct data_payload
-        # User login check is handled by _save_form_data.
-        data_payload = (current_user_id, d, t, dur, hr)
-        _save_form_data(
-            insert_query="INSERT INTO cardio(user_id,date,type,duration_min,avg_hr) VALUES(?,?,?,?,?)",
-            data_payload=data_payload,
-            success_message="Saved Cardio",
-        )
-
-# Logs Tab
-with tabs[4]:
-    st.header("📊 Logs")
-    current_user_id = st.session_state.user_id
-    if current_user_id is None:  # pragma: no cover
-        st.warning("Please log in to see your logs.")
-    else:
-        st.subheader("Resistance")
-        st.dataframe(load_table("resistance", current_user_id))
-        st.subheader("Mobility")
-        st.dataframe(load_table("mobility", current_user_id))
-        st.subheader("Cardio")
-        st.dataframe(load_table("cardio", current_user_id))
-
-        st.subheader("Progress Charts")
-        df_resistance = load_table("resistance", current_user_id)
-        if not df_resistance.empty:
-            for lift in df_resistance["exercise"].unique():
-                ddf = df_resistance[
-                    df_resistance["exercise"] == lift
-                ].copy()  # Use .copy() to avoid SettingWithCopyWarning
-                ddf["date"] = pd.to_datetime(ddf["date"])
-                # Ensure data is sorted by date for charting max weight over time
-                chart_data = (
-                    ddf.sort_values(by="date")
-                    .groupby(pd.Grouper(key="date", freq="D"))["actual_weight"]
-                    .max()
-                    .fillna(0)
+            repeat = st.checkbox("Repeat last session")
+            sets = st.number_input("# Sets", 1, 10, 3)
+        entries = []
+        pw, pr, pi = None, None, None
+        current_user_id = st.session_state.user_id  # Get current user's ID
+        for i in range(1, sets + 1):
+            with st.expander(f"Set {i}"):
+                if repeat:
+                    w0, r0, i0 = fetch_last(ex, i, current_user_id)
+                else:
+                    w0, r0, i0 = pw, pr, pi
+                maxw = float(150)
+                aw = st.slider(
+                    "Weight (kg)", 0.0, maxw, float(w0 or 0), step=0.5, key=f"res_w_{i}"
                 )
-                if not chart_data.empty:
-                    st.markdown(f"**{lift} - Max Weight Over Time**")
-                    st.line_chart(chart_data, use_container_width=True, height=200)
+                ar = st.slider("Reps", 1, 20, int(r0 or 6), key=f"res_r_{i}")
+                rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
+                pw, pr, pi = aw, ar, rir
+                # Add user_id to the entry
+                entries.append((current_user_id, d, week, day, ex, i, target, aw, ar, rir))
+        if st.button("Save Resistance"):
+            # The 'if not entries' check is specific and remains here.
+            # The user login check is handled by _save_form_data.
+            if not entries:  # pragma: no cover
+                st.warning("No sets to save.")
+            else:
+                _save_form_data(
+                    insert_query="INSERT INTO resistance(user_id,date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    data_payload=entries,
+                    success_message="Saved Resistance",
+                    is_many=True,
+                )
+
+    # Mobility Tab
+    with tabs[2]:
+        st.header("🤸 Mobility")
+        d = st.date_input("Date", date.today(), key="mob_date")
+        p = st.checkbox("Prep (Box breathing, Cat/Cow, CARs)")
+        j = st.checkbox("Joint Flow (WGS, Down-Dog↔Cobra, Lizard, Pigeon)")
+        a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
+        cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
+        if st.button("Save Mobility"):
+            current_user_id = st.session_state.user_id  # Needed to construct data_payload
+            # User login check is handled by _save_form_data.
+            data_payload = (current_user_id, d, int(p), int(j), int(a), int(cf))
+            _save_form_data(
+                insert_query="INSERT INTO mobility(user_id,date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?,?)",
+                data_payload=data_payload,
+                success_message="Saved Mobility",
+            )
+
+    # Cardio Tab
+    with tabs[3]:
+        st.header("🏃 Cardio")
+        d = st.date_input("Date", date.today(), key="car_date")
+        t = st.selectbox(
+            "Type", ["HIIT (4×4)", "10-min HIIT", "Zone-2 Run", "Other"], key="car_type"
+        )
+        dcol, hcol = st.columns(2)
+        dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
+        hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
+        if st.button("Save Cardio"):
+            current_user_id = st.session_state.user_id  # Needed to construct data_payload
+            # User login check is handled by _save_form_data.
+            data_payload = (current_user_id, d, t, dur, hr)
+            _save_form_data(
+                insert_query="INSERT INTO cardio(user_id,date,type,duration_min,avg_hr) VALUES(?,?,?,?,?)",
+                data_payload=data_payload,
+                success_message="Saved Cardio",
+            )
+
+    # Logs Tab
+    with tabs[4]:
+        st.header("📊 Logs")
+        current_user_id = st.session_state.user_id
+        if current_user_id is None:  # pragma: no cover
+            st.warning("Please log in to see your logs.")
         else:
-            st.write("No resistance data yet to display charts.")
+            st.subheader("Resistance")
+            st.dataframe(load_table("resistance", current_user_id))
+            st.subheader("Mobility")
+            st.dataframe(load_table("mobility", current_user_id))
+            st.subheader("Cardio")
+            st.dataframe(load_table("cardio", current_user_id))
+
+            st.subheader("Progress Charts")
+            df_resistance = load_table("resistance", current_user_id)
+            if not df_resistance.empty:
+                for lift in df_resistance["exercise"].unique():
+                    ddf = df_resistance[
+                        df_resistance["exercise"] == lift
+                    ].copy()  # Use .copy() to avoid SettingWithCopyWarning
+                    ddf["date"] = pd.to_datetime(ddf["date"])
+                    # Ensure data is sorted by date for charting max weight over time
+                    chart_data = (
+                        ddf.sort_values(by="date")
+                        .groupby(pd.Grouper(key="date", freq="D"))["actual_weight"]
+                        .max()
+                        .fillna(0)
+                    )
+                    if not chart_data.empty:
+                        st.markdown(f"**{lift} - Max Weight Over Time**")
+                        st.line_chart(chart_data, use_container_width=True, height=200)
+            else:
+                st.write("No resistance data yet to display charts.")
