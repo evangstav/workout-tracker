@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3  # Still needed for sqlite3.Error in _save_form_data
 from datetime import date
+import re # For parsing target strings
 # hashlib will be imported by database.py
 
 from database import (
@@ -90,6 +91,60 @@ weekly_resistance = {
 
 # --- Helpers ---
 # Note: The global 'conn' object is removed. Connections are now managed per function.
+
+# Helper function to parse target string for current set's percentage and reps
+def get_target_params_for_set(target_string, current_set_num):
+    """
+    Parses the target string (e.g., "1x4 @88% + 3x6-8 @78%") for a specific set number.
+    Returns a tuple (percentage, reps_value).
+    reps_value is an int if a specific number or first number of a range is found.
+    Returns (None, None) if not found or not applicable for either.
+    """
+    segments = target_string.split('+')
+    processed_sets_count = 0
+    for segment in segments:
+        segment = segment.strip()
+        # Pattern for "NxR @P%" - R can be a number or range (e.g., 6-8, 6–8)
+        match_with_percentage = re.match(r"(\d+)×([\d–-]+)\s*@(\d+)%", segment)
+        # Pattern for "NxR" (no percentage) - R can be a number or range
+        match_without_percentage = re.match(r"(\d+)×([\d–-]+)", segment)
+
+        num_sets_in_segment = 0
+        reps_str_in_segment = None
+        percentage_in_segment = None
+
+        if match_with_percentage:
+            num_sets_in_segment = int(match_with_percentage.group(1))
+            reps_str_in_segment = match_with_percentage.group(2)
+            percentage_in_segment = int(match_with_percentage.group(3))
+        elif match_without_percentage:
+            num_sets_in_segment = int(match_without_percentage.group(1))
+            reps_str_in_segment = match_without_percentage.group(2)
+        else:
+            continue # Segment format not recognized
+
+        if current_set_num > processed_sets_count and \
+           current_set_num <= processed_sets_count + num_sets_in_segment:
+            reps_val = None
+            if reps_str_in_segment:
+                try:
+                    reps_val = int(reps_str_in_segment)
+                except ValueError:
+                    # Try parsing first number of a range like "6-8" or "6–8"
+                    if '–' in reps_str_in_segment: # en-dash
+                        try:
+                            reps_val = int(reps_str_in_segment.split('–')[0])
+                        except ValueError: # pragma: no cover
+                            pass # Keep reps_val as None
+                    elif '-' in reps_str_in_segment: # hyphen
+                        try:
+                            reps_val = int(reps_str_in_segment.split('-')[0])
+                        except ValueError: # pragma: no cover
+                            pass # Keep reps_val as None
+            return percentage_in_segment, reps_val
+
+        processed_sets_count += num_sets_in_segment
+    return None, None # No specific parameters found for this set number
 
 
 def _save_form_data(insert_query, data_payload, success_message, is_many=False):
@@ -306,21 +361,47 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             repeat = st.checkbox("Repeat last session")
             sets = st.number_input("# Sets", 1, 10, 3)
         entries = []
-        pw, pr, pi = None, None, None
-        current_user_id = st.session_state.user_id  # Get current user's ID
-        for i in range(1, sets + 1):
+        pw, pr, pi = None, None, None # Previous set's weight, reps, RIR
+        current_user_id = st.session_state.user_id
+        slider_step = 0.5 # Define slider step for weight
+
+        for i in range(1, sets + 1): # For each set
+            w0, r0, i0 = None, None, None # Default values for current set's sliders
+
+            if repeat:
+                # If repeating last session, fetch data for this specific set number
+                w0_db, r0_db, i0_db = fetch_last(ex, i, current_user_id)
+                w0, r0, i0 = w0_db, r0_db, i0_db
+            else:
+                # Not repeating: try to calculate from 1RM or use previous set's values
+                one_rm_data = get_latest_1rm(current_user_id, ex)
+                target_percentage, target_reps_prog = get_target_params_for_set(target, i)
+
+                # Initialize with previous set's values (or None if first set)
+                w0_prev, r0_prev, i0_prev = pw, pr, pi
+                w0, r0, i0 = w0_prev, r0_prev, i0_prev
+
+                if one_rm_data and target_percentage is not None:
+                    one_rm_value = one_rm_data["one_rep_max"]
+                    calculated_w = (target_percentage / 100.0) * one_rm_value
+                    w0 = round(calculated_w / slider_step) * slider_step # Use calculated weight
+
+                    if target_reps_prog is not None:
+                        r0 = target_reps_prog # Use reps from program if available
+                    # If target_reps_prog is None, r0 remains r0_prev (from previous set or None)
+                    # i0 remains i0_prev (from previous set or None)
+                # If no 1RM or no target_percentage, w0, r0, i0 remain as previous set's values
+
             with st.expander(f"Set {i}"):
-                if repeat:
-                    w0, r0, i0 = fetch_last(ex, i, current_user_id)
-                else:
-                    w0, r0, i0 = pw, pr, pi
-                maxw = float(150)
+                maxw = float(150) # Max weight for slider
+                # Use (w0 or 0) for weight, (r0 or 6) for reps, (i0 or 3) for RIR as slider defaults
                 aw = st.slider(
-                    "Weight (kg)", 0.0, maxw, float(w0 or 0), step=0.5, key=f"res_w_{i}"
+                    "Weight (kg)", 0.0, maxw, float(w0 if w0 is not None else 0), step=slider_step, key=f"res_w_{i}"
                 )
-                ar = st.slider("Reps", 1, 20, int(r0 or 6), key=f"res_r_{i}")
-                rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
-                pw, pr, pi = aw, ar, rir
+                ar = st.slider("Reps", 1, 20, int(r0 if r0 is not None else 6), key=f"res_r_{i}")
+                rir = st.slider("RIR", 0, 5, int(i0 if i0 is not None else 3), key=f"res_i_{i}")
+
+                pw, pr, pi = aw, ar, rir # Update previous set's values for the next iteration
                 # Add user_id to the entry
                 entries.append(
                     (current_user_id, d, week, day, ex, i, target, aw, ar, rir)
