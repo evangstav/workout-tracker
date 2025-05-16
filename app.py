@@ -132,10 +132,16 @@ def init_db():
         for table_name in tables_to_migrate:
             # Check if user_id column exists before trying to update it
             # This is a safeguard, as previous code should have added it.
-            cols = [row[1] for row in c.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            cols = [
+                row[1]
+                for row in c.execute(f"PRAGMA table_info({table_name})").fetchall()
+            ]
             if "user_id" in cols:
-                c.execute(f"UPDATE {table_name} SET user_id = ? WHERE user_id IS NULL", (first_user_id,))
-    
+                c.execute(
+                    f"UPDATE {table_name} SET user_id = ? WHERE user_id IS NULL",
+                    (first_user_id,),
+                )
+
     conn.commit()
     conn.close()
 
