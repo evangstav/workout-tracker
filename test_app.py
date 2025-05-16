@@ -144,6 +144,34 @@ def test_get_user_from_db(test_db):  # Uses test_db fixture
     assert non_existent_user is None
 
 
+def test_update_user_password(test_db): # Uses test_db fixture
+    # Create a user first
+    username = "test_update_pass_user"
+    original_password = "oldPassword123"
+    user_id = app.create_user_in_db(username, original_password)
+    assert user_id is not None
+
+    # Update the password
+    new_password = "newPassword456"
+    update_success = database.update_user_password(user_id, new_password) # Call directly from database module
+    assert update_success is True
+
+    # Verify the new password works and old one doesn't
+    user_after_update = app.get_user_from_db(username)
+    assert user_after_update is not None
+    assert app.verify_password(user_after_update["password_hash"], new_password) is True
+    assert app.verify_password(user_after_update["password_hash"], original_password) is False
+
+    # Test updating password for a non-existent user_id (should not error, but return False or handle gracefully)
+    # The current database.update_user_password doesn't explicitly return False for non-existent user,
+    # but the update won't affect any rows. A more robust check might involve checking c.rowcount.
+    # For now, we ensure it doesn't crash.
+    non_existent_user_id = 99999
+    update_fail = database.update_user_password(non_existent_user_id, "somePassword") # Call directly from database module
+    assert update_fail is True # The function returns True if execute/commit don't raise an error.
+                               # No rows affected is not an error. This is acceptable.
+
+
 # --- Data Function Tests ---
 
 

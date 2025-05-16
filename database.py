@@ -156,3 +156,21 @@ def get_user_from_db(username):
     user = c.fetchone()
     conn.close()
     return user
+
+
+def update_user_password(user_id, new_password):
+    """Updates the password_hash for a given user_id."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), user_id),
+        )
+        conn.commit()
+        return True
+    except sqlite3.Error:  # pragma: no cover
+        # Could be various errors, though less likely for a simple update by ID
+        return False
+    finally:
+        conn.close()

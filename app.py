@@ -16,6 +16,7 @@ from database import (
     verify_password,
     create_user_in_db,
     get_user_from_db,
+    update_user_password,
 )
 
 # --- Page Config & Styles ---
@@ -562,6 +563,31 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                     )
         else:
             st.write("No metrics data yet to display history or charts.")
+
+        st.divider()
+        st.subheader("Change Password")
+        with st.form("change_password_form"):
+            current_password = st.text_input("Current Password", type="password", key="profile_current_password")
+            new_password = st.text_input("New Password (min 4 chars)", type="password", key="profile_new_password")
+            confirm_new_password = st.text_input("Confirm New Password", type="password", key="profile_confirm_new_password")
+            change_password_submitted = st.form_submit_button("Change Password")
+
+            if change_password_submitted:
+                user = get_user_from_db(st.session_state.username) # Fetch current user details
+                if user and verify_password(user["password_hash"], current_password):
+                    if new_password == confirm_new_password:
+                        if len(new_password) >= 4:
+                            if update_user_password(st.session_state.user_id, new_password):
+                                st.success("Password updated successfully.")
+                            else: # pragma: no cover
+                                st.error("Failed to update password. Database error.")
+                        else:
+                            st.error("New password must be at least 4 characters long.")
+                    else:
+                        st.error("New passwords do not match.")
+                else:
+                    st.error("Incorrect current password.")
+
 
     # Logs Tab
     with tabs[5]:  # Index updated from 4 to 5
