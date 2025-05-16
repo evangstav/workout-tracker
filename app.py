@@ -198,7 +198,7 @@ with tabs[1]:
                 w0, r0, i0 = fetch_last(ex, i)
             else:
                 w0, r0, i0 = pw, pr, pi
-            maxw = float((w0 or 0) * 1.2 + 5)
+            maxw = float(150)
             aw = st.slider(
                 "Weight (kg)", 0.0, maxw, float(w0 or 0), step=0.5, key=f"res_w_{i}"
             )
