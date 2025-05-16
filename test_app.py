@@ -10,6 +10,7 @@ import os  # For managing temporary test database file
 # For now, let's assume app.py can be imported, and we'll mock 'st' within tests.
 
 import app  # This will run app.init_db() with the production DB_NAME once.
+import database # Import the database module
 
 
 TEST_DB_FILE = "test_workout_tracker.db"
@@ -18,11 +19,12 @@ TEST_DB_FILE = "test_workout_tracker.db"
 @pytest.fixture
 def test_db(monkeypatch):
     """Fixture to set up and tear down a temporary database for tests."""
-    original_db_name = app.DB_NAME
-    monkeypatch.setattr(app, "DB_NAME", TEST_DB_FILE)
+    original_db_name = database.DB_NAME # Get original from database module
+    monkeypatch.setattr(database, "DB_NAME", TEST_DB_FILE) # Patch DB_NAME in database module
 
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
+    # app.init_db is database.init_db, which will now use the patched database.DB_NAME
     app.init_db()  # Initialize schema in the test DB file
 
     yield  # Test runs here
@@ -30,7 +32,7 @@ def test_db(monkeypatch):
     # Teardown: remove test DB and restore original DB name
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
-    monkeypatch.setattr(app, "DB_NAME", original_db_name)
+    monkeypatch.setattr(database, "DB_NAME", original_db_name) # Restore DB_NAME in database module
 
 
 @pytest.fixture
@@ -151,13 +153,13 @@ def test_add_column_if_not_exists(test_db):  # Uses test_db fixture
     c = conn.cursor()
 
     # Test adding a new column
-    app._add_column_if_not_exists(c, "users", "email", "TEXT")
+    database._add_column_if_not_exists(c, "users", "email", "TEXT") # Use database._add_column_if_not_exists
     c.execute("PRAGMA table_info(users)")
     columns = [row[1] for row in c.fetchall()]
     assert "email" in columns
 
     # Test attempting to add an existing column (should not fail or change schema)
-    app._add_column_if_not_exists(c, "users", "email", "TEXT")
+    database._add_column_if_not_exists(c, "users", "email", "TEXT") # Use database._add_column_if_not_exists
     c.execute("PRAGMA table_info(users)")
     columns_after_second_call = [row[1] for row in c.fetchall()]
     assert columns == columns_after_second_call
