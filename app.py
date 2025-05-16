@@ -122,6 +122,20 @@ def init_db():
             if "duplicate column name: user_id" not in str(e):  # pragma: no cover
                 raise
 
+    # --- Data Migration: Assign existing orphan records to the first user ---
+    c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
+    first_user = c.fetchone()
+
+    if first_user:
+        first_user_id = first_user["id"]
+        tables_to_migrate = ["resistance", "mobility", "cardio"]
+        for table_name in tables_to_migrate:
+            # Check if user_id column exists before trying to update it
+            # This is a safeguard, as previous code should have added it.
+            cols = [row[1] for row in c.execute(f"PRAGMA table_info({table_name})").fetchall()]
+            if "user_id" in cols:
+                c.execute(f"UPDATE {table_name} SET user_id = ? WHERE user_id IS NULL", (first_user_id,))
+    
     conn.commit()
     conn.close()
 
