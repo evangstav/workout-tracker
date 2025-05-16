@@ -6,6 +6,7 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 from datetime import date
+import hashlib # For password hashing
 
 # --- Page Config & Styles ---
 st.set_page_config(
@@ -34,45 +35,129 @@ input, .stSlider > div {
 )
 
 # --- Database Setup & Migration ---
-conn = sqlite3.connect("workout_tracker.db", check_same_thread=False)
-c = conn.cursor()
-# Create or alter resistance table
-c.execute("""CREATE TABLE IF NOT EXISTS resistance(
-    id INTEGER PRIMARY KEY,
-    date TEXT,
-    week INTEGER,
-    day TEXT,
-    exercise TEXT,
-    set_number INTEGER,
-    target TEXT,
-    actual_weight REAL,
-    actual_reps INTEGER,
-    rir INTEGER
-)""")
-# Ensure set_number column exists
-cols = [row[1] for row in c.execute("PRAGMA table_info(resistance)").fetchall()]
-if "set_number" not in cols:
-    c.execute("ALTER TABLE resistance ADD COLUMN set_number INTEGER DEFAULT 1")
-# Mobility table
-c.execute("""CREATE TABLE IF NOT EXISTS mobility(
-    id INTEGER PRIMARY KEY,
-    date TEXT,
-    prep_done INTEGER,
-    joint_flow_done INTEGER,
-    animal_circuit_done INTEGER,
-    cuff_finisher_done INTEGER
-)""")
-# Cardio table
-c.execute("""CREATE TABLE IF NOT EXISTS cardio(
-    id INTEGER PRIMARY KEY,
-    date TEXT,
-    type TEXT,
-    duration_min INTEGER,
-    avg_hr INTEGER
-)""")
-conn.commit()
+DB_NAME = "workout_tracker.db"
+
+def get_db_connection():
+    conn = sqlite3.connect(DB_NAME, check_same_thread=False)
+    conn.row_factory = sqlite3.Row # Access columns by name
+    return conn
+
+def init_db():
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    # Users table
+    c.execute("""CREATE TABLE IF NOT EXISTS users(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL
+    )""")
+
+    # Create or alter resistance table
+    c.execute("""CREATE TABLE IF NOT EXISTS resistance(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        week INTEGER,
+        day TEXT,
+        exercise TEXT,
+        set_number INTEGER,
+        target TEXT,
+        actual_weight REAL,
+        actual_reps INTEGER,
+        rir INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+    
+    cols_resistance = [row[1] for row in c.execute("PRAGMA table_info(resistance)").fetchall()]
+    if "set_number" not in cols_resistance:
+        c.execute("ALTER TABLE resistance ADD COLUMN set_number INTEGER DEFAULT 1")
+    if "user_id" not in cols_resistance:
+        try:
+            c.execute("ALTER TABLE resistance ADD COLUMN user_id INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name: user_id" not in str(e): # pragma: no cover
+                raise
+
+    # Mobility table
+    c.execute("""CREATE TABLE IF NOT EXISTS mobility(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        prep_done INTEGER,
+        joint_flow_done INTEGER,
+        animal_circuit_done INTEGER,
+        cuff_finisher_done INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+    cols_mobility = [row[1] for row in c.execute("PRAGMA table_info(mobility)").fetchall()]
+    if "user_id" not in cols_mobility:
+        try:
+            c.execute("ALTER TABLE mobility ADD COLUMN user_id INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name: user_id" not in str(e): # pragma: no cover
+                raise
+                
+    # Cardio table
+    c.execute("""CREATE TABLE IF NOT EXISTS cardio(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        type TEXT,
+        duration_min INTEGER,
+        avg_hr INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+    cols_cardio = [row[1] for row in c.execute("PRAGMA table_info(cardio)").fetchall()]
+    if "user_id" not in cols_cardio:
+        try:
+            c.execute("ALTER TABLE cardio ADD COLUMN user_id INTEGER")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name: user_id" not in str(e): # pragma: no cover
+                raise
+
+    conn.commit()
+    conn.close()
+
+init_db() # Initialize database and tables on app startup
+
+# --- Authentication Helpers ---
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_password(stored_password_hash, provided_password):
+    return stored_password_hash == hash_password(provided_password)
+
+def create_user_in_db(username, password):
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                  (username, hash_password(password)))
+        conn.commit()
+        user_id = c.lastrowid
+        return user_id
+    except sqlite3.IntegrityError: # Username already exists
+        return None
+    finally:
+        conn.close()
+
+def get_user_from_db(username):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT * FROM users WHERE username = ?", (username,))
+    user = c.fetchone()
+    conn.close()
+    return user
+
+# --- Session State Initialization ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_id = None
+    st.session_state.username = None
 
 # --- Program Definitions ---
+# (This remains global as it's program structure, not user data)
 weekly_resistance = {
     "Monday": [
         {"exercise": "Back-squat", "target": "1×4 @88% + 3×6 @78%"},
@@ -95,29 +180,99 @@ weekly_resistance = {
 
 
 # --- Helpers ---
-@st.cache_data
-def load_table(name):
-    return pd.read_sql_query(f"SELECT * FROM {name} ORDER BY date DESC", conn)
+# Note: The global 'conn' object is removed. Connections are now managed per function.
 
+@st.cache_data # Cache will be specific to user_id due to it being an argument
+def load_table(name, user_id):
+    conn = get_db_connection()
+    # Ensure user_id is not None before querying
+    if user_id is None:
+        conn.close()
+        return pd.DataFrame() # Return empty DataFrame if no user_id
+    df = pd.read_sql_query(f"SELECT * FROM {name} WHERE user_id = ? ORDER BY date DESC", conn, params=(user_id,))
+    conn.close()
+    return df
 
-@st.cache_data
-def fetch_last(exercise, set_num):
+@st.cache_data # Cache will be specific to user_id
+def fetch_last(exercise, set_num, user_id):
+    conn = get_db_connection()
+    # Ensure user_id is not None
+    if user_id is None:
+        conn.close()
+        return None, None, None
     df = pd.read_sql_query(
-        "SELECT actual_weight, actual_reps, rir FROM resistance WHERE exercise=? AND set_number=? ORDER BY date DESC LIMIT 1",
+        "SELECT actual_weight, actual_reps, rir FROM resistance WHERE exercise=? AND set_number=? AND user_id = ? ORDER BY date DESC LIMIT 1",
         conn,
-        params=(exercise, set_num),
+        params=(exercise, set_num, user_id),
     )
+    conn.close()
     if not df.empty:
         r = df.iloc[0]
         return float(r["actual_weight"]), int(r["actual_reps"]), int(r["rir"])
     return None, None, None
 
+# --- Login/Signup UI ---
+def show_login_signup_forms():
+    st.sidebar.title("User Account")
+    form_choice = st.sidebar.radio("Choose Action", ["Login", "Sign Up"], key="auth_choice")
 
-# --- Main Application with Tabs ---
-tabs = st.tabs(["Guide", "Resistance", "Mobility", "Cardio", "Logs"])
+    if form_choice == "Login":
+        with st.sidebar.form("login_form"):
+            username = st.text_input("Username", key="login_username")
+            password = st.text_input("Password", type="password", key="login_password")
+            login_button = st.form_submit_button("Login")
 
-# Guide Tab
-with tabs[0]:
+            if login_button:
+                user = get_user_from_db(username)
+                if user and verify_password(user["password_hash"], password):
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = user["id"]
+                    st.session_state.username = user["username"]
+                    st.cache_data.clear() # Clear cache on login
+                    st.experimental_rerun()
+                else:
+                    st.sidebar.error("Invalid username or password")
+    
+    elif form_choice == "Sign Up":
+        with st.sidebar.form("signup_form"):
+            new_username = st.text_input("Choose Username", key="signup_username")
+            new_password = st.text_input("Choose Password (min 4 chars)", type="password", key="signup_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="signup_confirm_password")
+            signup_button = st.form_submit_button("Sign Up")
+
+            if signup_button:
+                if not new_username or not new_password:
+                    st.sidebar.error("Username and password cannot be empty.")
+                elif new_password == confirm_password:
+                    if len(new_password) >= 4:
+                        user_id = create_user_in_db(new_username, new_password)
+                        if user_id:
+                            st.sidebar.success("Account created! Please login.")
+                        else:
+                            st.sidebar.error("Username already exists or database error.")
+                    else:
+                        st.sidebar.error("Password should be at least 4 characters.")
+                else:
+                    st.sidebar.error("Passwords do not match.")
+
+# --- Main Application Logic ---
+if not st.session_state.get("logged_in", False): # Use .get for safety
+    show_login_signup_forms()
+    st.info("Please log in or sign up using the sidebar to access the app.")
+else:
+    st.sidebar.markdown(f"Logged in as **{st.session_state.username}**")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.user_id = None
+        st.session_state.username = None
+        st.cache_data.clear() # Clear cache on logout
+        st.experimental_rerun()
+
+    # --- Main Application with Tabs (only if logged in) ---
+    tabs = st.tabs(["Guide", "Resistance", "Mobility", "Cardio", "Logs"])
+
+    # Guide Tab (No user-specific data, can remain as is)
+    with tabs[0]:
     st.header("📖 4-Week Program Guide")
     with st.expander("1. Resistance Framework", True):
         st.markdown(
@@ -192,10 +347,11 @@ with tabs[1]:
         sets = st.number_input("# Sets", 1, 10, 3)
     entries = []
     pw, pr, pi = None, None, None
+    current_user_id = st.session_state.user_id # Get current user's ID
     for i in range(1, sets + 1):
         with st.expander(f"Set {i}"):
             if repeat:
-                w0, r0, i0 = fetch_last(ex, i)
+                w0, r0, i0 = fetch_last(ex, i, current_user_id)
             else:
                 w0, r0, i0 = pw, pr, pi
             maxw = float(150)
@@ -205,14 +361,24 @@ with tabs[1]:
             ar = st.slider("Reps", 1, 20, int(r0 or 6), key=f"res_r_{i}")
             rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
             pw, pr, pi = aw, ar, rir
-            entries.append((d, week, day, ex, i, target, aw, ar, rir))
+            # Add user_id to the entry
+            entries.append((current_user_id, d, week, day, ex, i, target, aw, ar, rir))
     if st.button("Save Resistance"):
-        c.executemany(
-            "INSERT INTO resistance(date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?)",
-            entries,
-        )
-        conn.commit()
-        st.success("Saved Resistance")
+        if not entries: # pragma: no cover
+            st.warning("No sets to save.")
+        elif current_user_id is None: # pragma: no cover
+            st.error("User not logged in. Cannot save data.")
+        else:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.executemany(
+                "INSERT INTO resistance(user_id,date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                entries,
+            )
+            conn.commit()
+            conn.close()
+            st.success("Saved Resistance")
+            st.cache_data.clear() # Clear cache after saving new data
 
 # Mobility Tab
 with tabs[2]:
@@ -223,12 +389,20 @@ with tabs[2]:
     a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
     cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
     if st.button("Save Mobility"):
-        c.execute(
-            "INSERT INTO mobility(date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?)",
-            (d, int(p), int(j), int(a), int(cf)),
-        )
-        conn.commit()
-        st.success("Saved Mobility")
+        current_user_id = st.session_state.user_id
+        if current_user_id is None: # pragma: no cover
+            st.error("User not logged in. Cannot save data.")
+        else:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO mobility(user_id,date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?,?)",
+                (current_user_id, d, int(p), int(j), int(a), int(cf)),
+            )
+            conn.commit()
+            conn.close()
+            st.success("Saved Mobility")
+            st.cache_data.clear() # Clear cache
 
 # Cardio Tab
 with tabs[3]:
@@ -241,26 +415,48 @@ with tabs[3]:
     dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
     hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
     if st.button("Save Cardio"):
-        c.execute(
-            "INSERT INTO cardio(date,type,duration_min,avg_hr) VALUES(?,?,?,?)",
-            (d, t, dur, hr),
-        )
-        conn.commit()
-        st.success("Saved Cardio")
+        current_user_id = st.session_state.user_id
+        if current_user_id is None: # pragma: no cover
+            st.error("User not logged in. Cannot save data.")
+        else:
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute(
+                "INSERT INTO cardio(user_id,date,type,duration_min,avg_hr) VALUES(?,?,?,?,?)",
+                (current_user_id, d, t, dur, hr),
+            )
+            conn.commit()
+            conn.close()
+            st.success("Saved Cardio")
+            st.cache_data.clear() # Clear cache
 
 # Logs Tab
 with tabs[4]:
     st.header("📊 Logs")
-    st.subheader("Resistance")
-    st.dataframe(load_table("resistance"))
-    st.subheader("Mobility")
-    st.dataframe(load_table("mobility"))
-    st.subheader("Cardio")
-    st.dataframe(load_table("cardio"))
-    st.subheader("Progress Charts")
-    df = load_table("resistance")
-    for lift in df["exercise"].unique():
-        ddf = df[df["exercise"] == lift]
+    current_user_id = st.session_state.user_id
+    if current_user_id is None: # pragma: no cover
+        st.warning("Please log in to see your logs.")
+    else:
+        st.subheader("Resistance")
+        st.dataframe(load_table("resistance", current_user_id))
+        st.subheader("Mobility")
+        st.dataframe(load_table("mobility", current_user_id))
+        st.subheader("Cardio")
+        st.dataframe(load_table("cardio", current_user_id))
+        
+        st.subheader("Progress Charts")
+        df_resistance = load_table("resistance", current_user_id)
+        if not df_resistance.empty:
+            for lift in df_resistance["exercise"].unique():
+                ddf = df_resistance[df_resistance["exercise"] == lift].copy() # Use .copy() to avoid SettingWithCopyWarning
+                ddf["date"] = pd.to_datetime(ddf["date"])
+                # Ensure data is sorted by date for charting max weight over time
+                chart_data = ddf.sort_values(by="date").groupby(pd.Grouper(key="date", freq="D"))["actual_weight"].max().fillna(0)
+                if not chart_data.empty:
+                    st.markdown(f"**{lift} - Max Weight Over Time**")
+                    st.line_chart(chart_data, use_container_width=True, height=200)
+        else:
+            st.write("No resistance data yet to display charts.")
         ddf["date"] = pd.to_datetime(ddf["date"])
         chart = ddf.groupby("date")["actual_weight"].max().sort_index()
         st.line_chart(chart, use_container_width=True, height=200)
