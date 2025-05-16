@@ -44,6 +44,19 @@ def get_db_connection():
     return conn
 
 
+def _add_column_if_not_exists(cursor, table_name, column_name, column_type_with_constraints):
+    """Helper to add a column to a table if it doesn't already exist."""
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    columns = [row[1] for row in cursor.fetchall()]
+    if column_name not in columns:
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type_with_constraints}")
+        except sqlite3.OperationalError as e:
+            # This check is for "duplicate column name", which might occur in rare scenarios
+            # even after the "if column_name not in columns" check.
+            if f"duplicate column name: {column_name}" not in str(e):  # pragma: no cover
+                raise
+
 def init_db():
     conn = get_db_connection()
     c = conn.cursor()
@@ -71,17 +84,8 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
-    cols_resistance = [
-        row[1] for row in c.execute("PRAGMA table_info(resistance)").fetchall()
-    ]
-    if "set_number" not in cols_resistance:
-        c.execute("ALTER TABLE resistance ADD COLUMN set_number INTEGER DEFAULT 1")
-    if "user_id" not in cols_resistance:
-        try:
-            c.execute("ALTER TABLE resistance ADD COLUMN user_id INTEGER")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name: user_id" not in str(e):  # pragma: no cover
-                raise
+    _add_column_if_not_exists(c, "resistance", "set_number", "INTEGER DEFAULT 1")
+    _add_column_if_not_exists(c, "resistance", "user_id", "INTEGER")
 
     # Mobility table
     c.execute("""CREATE TABLE IF NOT EXISTS mobility(
@@ -94,16 +98,8 @@ def init_db():
         cuff_finisher_done INTEGER,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
-    cols_mobility = [
-        row[1] for row in c.execute("PRAGMA table_info(mobility)").fetchall()
-    ]
-    if "user_id" not in cols_mobility:
-        try:
-            c.execute("ALTER TABLE mobility ADD COLUMN user_id INTEGER")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name: user_id" not in str(e):  # pragma: no cover
-                raise
-
+    _add_column_if_not_exists(c, "mobility", "user_id", "INTEGER")
+                
     # Cardio table
     c.execute("""CREATE TABLE IF NOT EXISTS cardio(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -114,13 +110,7 @@ def init_db():
         avg_hr INTEGER,
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
-    cols_cardio = [row[1] for row in c.execute("PRAGMA table_info(cardio)").fetchall()]
-    if "user_id" not in cols_cardio:
-        try:
-            c.execute("ALTER TABLE cardio ADD COLUMN user_id INTEGER")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name: user_id" not in str(e):  # pragma: no cover
-                raise
+    _add_column_if_not_exists(c, "cardio", "user_id", "INTEGER")
 
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
@@ -216,6 +206,34 @@ weekly_resistance = {
 # --- Helpers ---
 # Note: The global 'conn' object is removed. Connections are now managed per function.
 
+def _save_form_data(insert_query, data_payload, success_message, is_many=False):
+    """Helper to save form data to the database."""
+    if st.session_state.user_id is None:  # General check for logged-in user
+        st.error("User not logged in. Cannot save data.")  # pragma: no cover
+        return
+
+    # For batch inserts, data_payload is a list. If it's empty, no action.
+    if is_many and not data_payload:
+        st.warning("No data to save.") # Typically for resistance sets
+        return
+    
+    # For single inserts, data_payload is a tuple.
+    # An empty tuple would cause c.execute to fail, which is caught by try-except.
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        if is_many:
+            c.executemany(insert_query, data_payload)
+        else:
+            c.execute(insert_query, data_payload)
+        conn.commit()
+        st.success(success_message)
+        st.cache_data.clear()  # Clear cache after saving new data
+    except sqlite3.Error as e:  # pragma: no cover
+        st.error(f"Database error: {e}")
+    finally:
+        conn.close()
 
 @st.cache_data  # Cache will be specific to user_id due to it being an argument
 def load_table(name, user_id):
@@ -414,21 +432,17 @@ with tabs[1]:
             # Add user_id to the entry
             entries.append((current_user_id, d, week, day, ex, i, target, aw, ar, rir))
     if st.button("Save Resistance"):
+        # The 'if not entries' check is specific and remains here.
+        # The user login check is handled by _save_form_data.
         if not entries:  # pragma: no cover
             st.warning("No sets to save.")
-        elif current_user_id is None:  # pragma: no cover
-            st.error("User not logged in. Cannot save data.")
         else:
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.executemany(
-                "INSERT INTO resistance(user_id,date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?,?)",
-                entries,
+            _save_form_data(
+                insert_query="INSERT INTO resistance(user_id,date,week,day,exercise,set_number,target,actual_weight,actual_reps,rir) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                data_payload=entries,
+                success_message="Saved Resistance",
+                is_many=True
             )
-            conn.commit()
-            conn.close()
-            st.success("Saved Resistance")
-            st.cache_data.clear()  # Clear cache after saving new data
 
 # Mobility Tab
 with tabs[2]:
@@ -439,20 +453,14 @@ with tabs[2]:
     a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
     cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
     if st.button("Save Mobility"):
-        current_user_id = st.session_state.user_id
-        if current_user_id is None:  # pragma: no cover
-            st.error("User not logged in. Cannot save data.")
-        else:
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute(
-                "INSERT INTO mobility(user_id,date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?,?)",
-                (current_user_id, d, int(p), int(j), int(a), int(cf)),
-            )
-            conn.commit()
-            conn.close()
-            st.success("Saved Mobility")
-            st.cache_data.clear()  # Clear cache
+        current_user_id = st.session_state.user_id # Needed to construct data_payload
+        # User login check is handled by _save_form_data.
+        data_payload = (current_user_id, d, int(p), int(j), int(a), int(cf))
+        _save_form_data(
+            insert_query="INSERT INTO mobility(user_id,date,prep_done,joint_flow_done,animal_circuit_done,cuff_finisher_done) VALUES(?,?,?,?,?,?)",
+            data_payload=data_payload,
+            success_message="Saved Mobility"
+        )
 
 # Cardio Tab
 with tabs[3]:
@@ -465,20 +473,14 @@ with tabs[3]:
     dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
     hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
     if st.button("Save Cardio"):
-        current_user_id = st.session_state.user_id
-        if current_user_id is None:  # pragma: no cover
-            st.error("User not logged in. Cannot save data.")
-        else:
-            conn = get_db_connection()
-            c = conn.cursor()
-            c.execute(
-                "INSERT INTO cardio(user_id,date,type,duration_min,avg_hr) VALUES(?,?,?,?,?)",
-                (current_user_id, d, t, dur, hr),
-            )
-            conn.commit()
-            conn.close()
-            st.success("Saved Cardio")
-            st.cache_data.clear()  # Clear cache
+        current_user_id = st.session_state.user_id # Needed to construct data_payload
+        # User login check is handled by _save_form_data.
+        data_payload = (current_user_id, d, t, dur, hr)
+        _save_form_data(
+            insert_query="INSERT INTO cardio(user_id,date,type,duration_min,avg_hr) VALUES(?,?,?,?,?)",
+            data_payload=data_payload,
+            success_message="Saved Cardio"
+        )
 
 # Logs Tab
 with tabs[4]:
