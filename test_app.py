@@ -138,6 +138,7 @@ def test_get_user_from_db(test_db): # Uses test_db fixture
 # --- Data Function Tests ---
 
 def test_add_column_if_not_exists(test_db): # Uses test_db fixture
+    # This test doesn't involve st.cache_data on the function being tested, so no changes needed here.
     conn = app.get_db_connection()
     c = conn.cursor()
     
@@ -155,8 +156,10 @@ def test_add_column_if_not_exists(test_db): # Uses test_db fixture
     
     conn.close()
 
-def test_load_table(active_user): # Uses active_user fixture (which implies test_db)
-    app.load_table.clear() # Clear cache for this specific function before test
+def test_load_table(active_user, monkeypatch): # Uses active_user fixture (which implies test_db)
+    # Temporarily replace the cached function with its original, undecorated version
+    monkeypatch.setattr(app, 'load_table', app.load_table.__wrapped__)
+    
     test_user_id = active_user
     # Test loading an empty table
     df_empty = app.load_table("resistance", test_user_id)
@@ -195,8 +198,10 @@ def test_load_table(active_user): # Uses active_user fixture (which implies test
     assert df_none_user.empty is True
 
 
-def test_fetch_last(active_user): # Uses active_user fixture
-    app.fetch_last.clear() # Clear cache for this specific function before test
+def test_fetch_last(active_user, monkeypatch): # Uses active_user fixture
+    # Temporarily replace the cached function with its original, undecorated version
+    monkeypatch.setattr(app, 'fetch_last', app.fetch_last.__wrapped__)
+
     test_user_id = active_user
     # Test fetching when no data exists
     last = app.fetch_last("Squat", 1, test_user_id)
