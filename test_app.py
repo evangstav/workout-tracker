@@ -46,7 +46,26 @@ def mock_st_environment(monkeypatch, active_user):
     # active_user fixture ensures a user exists and db is set up
     mock_st_obj = MagicMock()
     # Simulate logged-in user for most tests using this fixture
-    mock_st_obj.session_state = {'user_id': active_user, 'username': 'test_active_user'}
+    # Make session_state a MagicMock itself to allow attribute access and .get()
+    mock_session_state = MagicMock()
+    mock_session_state.user_id = active_user
+    mock_session_state.username = 'test_active_user'
+    mock_session_state.logged_in = True # Default to logged in for this fixture
+
+    # Define a side_effect for .get() to mimic Streamlit's SessionState behavior
+    def session_get_side_effect(key, default=None):
+        if key == 'user_id':
+            return mock_session_state.user_id
+        if key == 'username':
+            return mock_session_state.username
+        if key == 'logged_in':
+            return mock_session_state.logged_in
+        # Fallback for other keys if needed, though not strictly necessary if only these are used
+        return getattr(mock_session_state, key, default)
+
+    mock_session_state.get = MagicMock(side_effect=session_get_side_effect)
+    mock_st_obj.session_state = mock_session_state
+    
     mock_st_obj.cache_data.clear = MagicMock()
     mock_st_obj.rerun = MagicMock()
     mock_st_obj.sidebar = MagicMock()
@@ -109,9 +128,9 @@ def test_create_user_in_db(test_db): # Uses test_db fixture
 def test_get_user_from_db(test_db): # Uses test_db fixture
     app.create_user_in_db("testuser_get", "password123")
     
-    user = app.get_user_from_db("test_user_get") # Corrected username
+    user = app.get_user_from_db("testuser_get") # Ensure username matches creation
     assert user is not None
-    assert user["username"] == "testuser_get" # Corrected username
+    assert user["username"] == "testuser_get"
 
     non_existent_user = app.get_user_from_db("nonexistentuser")
     assert non_existent_user is None
@@ -137,6 +156,7 @@ def test_add_column_if_not_exists(test_db): # Uses test_db fixture
     conn.close()
 
 def test_load_table(active_user): # Uses active_user fixture (which implies test_db)
+    app.load_table.clear() # Clear cache for this specific function before test
     test_user_id = active_user
     # Test loading an empty table
     df_empty = app.load_table("resistance", test_user_id)
@@ -176,6 +196,7 @@ def test_load_table(active_user): # Uses active_user fixture (which implies test
 
 
 def test_fetch_last(active_user): # Uses active_user fixture
+    app.fetch_last.clear() # Clear cache for this specific function before test
     test_user_id = active_user
     # Test fetching when no data exists
     last = app.fetch_last("Squat", 1, test_user_id)
@@ -260,7 +281,9 @@ def test_save_form_data_many_insert(mock_st_environment, active_user):
 
 def test_save_form_data_no_user_logged_in(mock_st_environment):
     mock_st = mock_st_environment
-    mock_st.session_state['user_id'] = None # Simulate logged-out user
+    # Configure the session_state mock for this specific test case
+    mock_st.session_state.user_id = None 
+    mock_st.session_state.logged_in = False
     
     app._save_form_data("QUERY", (), "Success Message")
     
