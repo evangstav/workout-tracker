@@ -349,7 +349,9 @@ def show_login_signup_forms():
 if not st.session_state.get("logged_in", False):  # Use .get for safety
     show_login_signup_forms()
     st.title("Welcome to the 4-Week Program Tracker!")
-    st.markdown("Please log in or sign up using the sidebar to access your personalized workout tracking.")
+    st.markdown(
+        "Please log in or sign up using the sidebar to access your personalized workout tracking."
+    )
 else:
     st.sidebar.markdown(f"Logged in as **{st.session_state.username}**")
     if st.sidebar.button("Logout"):
@@ -514,7 +516,7 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             )
 
     # Profile Tab
-    with tabs[4]: # New Profile tab is at index 4
+    with tabs[4]:  # New Profile tab is at index 4
         st.header("👤 User Profile & Metrics")
         current_user_id = st.session_state.user_id
 
@@ -527,7 +529,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
 
         with st.form("user_metrics_form"):
             st.markdown("#### Record New Metrics")
-            metric_date = st.date_input("Record Date", date.today(), key="profile_metric_date")
+            metric_date = st.date_input(
+                "Record Date", date.today(), key="profile_metric_date"
+            )
 
             col1, col2 = st.columns(2)
             with col1:
@@ -535,51 +539,55 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                     "Height (cm)",
                     min_value=50.0,
                     max_value=250.0,
-                    value=latest_entry.get("height_cm"), # Uses min_value if None
+                    value=latest_entry.get("height_cm"),  # Uses min_value if None
                     step=0.1,
                     format="%.1f",
                     key="profile_height",
-                    help="Enter your current height."
+                    help="Enter your current height.",
                 )
                 weight = st.number_input(
                     "Weight (kg)",
                     min_value=20.0,
                     max_value=300.0,
-                    value=latest_entry.get("weight_kg"), # Uses min_value if None
+                    value=latest_entry.get("weight_kg"),  # Uses min_value if None
                     step=0.1,
                     format="%.1f",
                     key="profile_weight",
-                    help="Enter your current weight."
+                    help="Enter your current weight.",
                 )
                 age = st.number_input(
                     "Age (years)",
                     min_value=1,
                     max_value=120,
-                    value=latest_entry.get("age"), # Uses min_value if None
+                    value=latest_entry.get("age"),  # Uses min_value if None
                     step=1,
                     key="profile_age",
-                    help="Enter your current age."
+                    help="Enter your current age.",
                 )
             with col2:
                 sex_options = ["Not specified", "Male", "Female", "Other"]
                 current_sex = latest_entry.get("sex", "Not specified")
-                sex_index = sex_options.index(current_sex) if current_sex in sex_options else 0
+                sex_index = (
+                    sex_options.index(current_sex) if current_sex in sex_options else 0
+                )
                 sex = st.selectbox(
                     "Sex",
                     options=sex_options,
                     index=sex_index,
                     key="profile_sex",
-                    help="Select your sex."
+                    help="Select your sex.",
                 )
                 body_fat = st.number_input(
                     "Body Fat (%)",
                     min_value=1.0,
                     max_value=70.0,
-                    value=latest_entry.get("body_fat_percentage"), # Uses min_value if None
+                    value=latest_entry.get(
+                        "body_fat_percentage"
+                    ),  # Uses min_value if None
                     step=0.1,
                     format="%.1f",
                     key="profile_body_fat",
-                    help="Enter your body fat percentage."
+                    help="Enter your body fat percentage.",
                 )
 
             submitted = st.form_submit_button("Save Metrics")
@@ -589,11 +597,11 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 data_payload = (
                     current_user_id,
                     metric_date,
-                    height, # Direct value from number_input
-                    weight, # Direct value from number_input
+                    height,  # Direct value from number_input
+                    weight,  # Direct value from number_input
                     sex_to_save,
-                    age,    # Direct value from number_input
-                    body_fat # Direct value from number_input
+                    age,  # Direct value from number_input
+                    body_fat,  # Direct value from number_input
                 )
                 _save_form_data(
                     insert_query="INSERT INTO user_metrics (user_id, date, height_cm, weight_kg, sex, age, body_fat_percentage) VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -607,17 +615,23 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         # Re-fetch to display the absolute latest, including any just saved
         current_metrics_to_display_df = load_table("user_metrics", current_user_id)
         if not current_metrics_to_display_df.empty:
-            display_latest = current_metrics_to_display_df.iloc[0] # Already sorted by date DESC
-            st.write(f"**Date:** {pd.to_datetime(display_latest['date']).strftime('%Y-%m-%d')}")
-            if pd.notna(display_latest['height_cm']):
+            display_latest = current_metrics_to_display_df.iloc[
+                0
+            ]  # Already sorted by date DESC
+            st.write(
+                f"**Date:** {pd.to_datetime(display_latest['date']).strftime('%Y-%m-%d')}"
+            )
+            if pd.notna(display_latest["height_cm"]):
                 st.write(f"**Height:** {display_latest['height_cm']:.1f} cm")
-            if pd.notna(display_latest['weight_kg']):
+            if pd.notna(display_latest["weight_kg"]):
                 st.write(f"**Weight:** {display_latest['weight_kg']:.1f} kg")
-            if pd.notna(display_latest['age']):
-                st.write(f"**Age:** {display_latest['age']}") # Assuming age is stored as int
-            if pd.notna(display_latest['sex']):
+            if pd.notna(display_latest["age"]):
+                st.write(
+                    f"**Age:** {display_latest['age']}"
+                )  # Assuming age is stored as int
+            if pd.notna(display_latest["sex"]):
                 st.write(f"**Sex:** {display_latest['sex']}")
-            if pd.notna(display_latest['body_fat_percentage']):
+            if pd.notna(display_latest["body_fat_percentage"]):
                 st.write(f"**Body Fat:** {display_latest['body_fat_percentage']:.1f}%")
         else:
             st.write("No metrics recorded yet.")
@@ -627,36 +641,68 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         all_metrics_df = load_table("user_metrics", current_user_id)
         if not all_metrics_df.empty:
             display_df = all_metrics_df.copy()
-            display_df['date'] = pd.to_datetime(display_df['date']).dt.strftime('%Y-%m-%d')
-            cols_to_display = ['date', 'height_cm', 'weight_kg', 'age', 'sex', 'body_fat_percentage']
-            existing_cols_to_display = [col for col in cols_to_display if col in display_df.columns]
-            st.dataframe(display_df[existing_cols_to_display].sort_values(by="date", ascending=False), use_container_width=True)
+            display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime(
+                "%Y-%m-%d"
+            )
+            cols_to_display = [
+                "date",
+                "height_cm",
+                "weight_kg",
+                "age",
+                "sex",
+                "body_fat_percentage",
+            ]
+            existing_cols_to_display = [
+                col for col in cols_to_display if col in display_df.columns
+            ]
+            st.dataframe(
+                display_df[existing_cols_to_display].sort_values(
+                    by="date", ascending=False
+                ),
+                use_container_width=True,
+            )
 
             st.subheader("Progress Charts")
             # Chart for Weight
-            if 'weight_kg' in all_metrics_df.columns and all_metrics_df['weight_kg'].notna().any():
-                weight_chart_data = all_metrics_df[['date', 'weight_kg']].copy()
-                weight_chart_data['date'] = pd.to_datetime(weight_chart_data['date'])
-                weight_chart_data = weight_chart_data.dropna(subset=['weight_kg'])
-                weight_chart_data = weight_chart_data.sort_values(by='date').set_index('date')
+            if (
+                "weight_kg" in all_metrics_df.columns
+                and all_metrics_df["weight_kg"].notna().any()
+            ):
+                weight_chart_data = all_metrics_df[["date", "weight_kg"]].copy()
+                weight_chart_data["date"] = pd.to_datetime(weight_chart_data["date"])
+                weight_chart_data = weight_chart_data.dropna(subset=["weight_kg"])
+                weight_chart_data = weight_chart_data.sort_values(by="date").set_index(
+                    "date"
+                )
                 if not weight_chart_data.empty:
                     st.markdown("**Weight (kg) Over Time**")
-                    st.line_chart(weight_chart_data['weight_kg'], use_container_width=True, height=200)
+                    st.line_chart(
+                        weight_chart_data["weight_kg"],
+                        use_container_width=True,
+                        height=200,
+                    )
 
             # Chart for Body Fat
-            if 'body_fat_percentage' in all_metrics_df.columns and all_metrics_df['body_fat_percentage'].notna().any():
-                bf_chart_data = all_metrics_df[['date', 'body_fat_percentage']].copy()
-                bf_chart_data['date'] = pd.to_datetime(bf_chart_data['date'])
-                bf_chart_data = bf_chart_data.dropna(subset=['body_fat_percentage'])
-                bf_chart_data = bf_chart_data.sort_values(by='date').set_index('date')
+            if (
+                "body_fat_percentage" in all_metrics_df.columns
+                and all_metrics_df["body_fat_percentage"].notna().any()
+            ):
+                bf_chart_data = all_metrics_df[["date", "body_fat_percentage"]].copy()
+                bf_chart_data["date"] = pd.to_datetime(bf_chart_data["date"])
+                bf_chart_data = bf_chart_data.dropna(subset=["body_fat_percentage"])
+                bf_chart_data = bf_chart_data.sort_values(by="date").set_index("date")
                 if not bf_chart_data.empty:
                     st.markdown("**Body Fat (%) Over Time**")
-                    st.line_chart(bf_chart_data['body_fat_percentage'], use_container_width=True, height=200)
+                    st.line_chart(
+                        bf_chart_data["body_fat_percentage"],
+                        use_container_width=True,
+                        height=200,
+                    )
         else:
             st.write("No metrics data yet to display history or charts.")
 
     # Logs Tab
-    with tabs[5]: # Index updated from 4 to 5
+    with tabs[5]:  # Index updated from 4 to 5
         st.header("📊 Logs")
         current_user_id = st.session_state.user_id
         if current_user_id is None:  # pragma: no cover
