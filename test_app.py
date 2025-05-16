@@ -1,9 +1,8 @@
 import pytest
 from unittest.mock import patch, MagicMock
-import sqlite3
 import pandas as pd
 from datetime import date
-import os # For managing temporary test database file
+import os  # For managing temporary test database file
 
 # Before importing app, we need to ensure Streamlit's st object is minimally mocked
 # if we want to avoid errors for st.set_page_config, etc., during import.
@@ -15,22 +14,24 @@ import app  # This will run app.init_db() with the production DB_NAME once.
 
 TEST_DB_FILE = "test_workout_tracker.db"
 
+
 @pytest.fixture
 def test_db(monkeypatch):
     """Fixture to set up and tear down a temporary database for tests."""
     original_db_name = app.DB_NAME
-    monkeypatch.setattr(app, 'DB_NAME', TEST_DB_FILE)
-    
+    monkeypatch.setattr(app, "DB_NAME", TEST_DB_FILE)
+
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
-    app.init_db() # Initialize schema in the test DB file
-    
-    yield # Test runs here
-    
+    app.init_db()  # Initialize schema in the test DB file
+
+    yield  # Test runs here
+
     # Teardown: remove test DB and restore original DB name
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
-    monkeypatch.setattr(app, 'DB_NAME', original_db_name)
+    monkeypatch.setattr(app, "DB_NAME", original_db_name)
+
 
 @pytest.fixture
 def active_user(test_db):
@@ -39,6 +40,7 @@ def active_user(test_db):
     user_id = app.create_user_in_db("test_active_user", "password123")
     assert user_id is not None, "Setup failed: Could not create active_user"
     return user_id
+
 
 @pytest.fixture
 def mock_st_environment(monkeypatch, active_user):
@@ -49,23 +51,23 @@ def mock_st_environment(monkeypatch, active_user):
     # Make session_state a MagicMock itself to allow attribute access and .get()
     mock_session_state = MagicMock()
     mock_session_state.user_id = active_user
-    mock_session_state.username = 'test_active_user'
-    mock_session_state.logged_in = True # Default to logged in for this fixture
+    mock_session_state.username = "test_active_user"
+    mock_session_state.logged_in = True  # Default to logged in for this fixture
 
     # Define a side_effect for .get() to mimic Streamlit's SessionState behavior
     def session_get_side_effect(key, default=None):
-        if key == 'user_id':
+        if key == "user_id":
             return mock_session_state.user_id
-        if key == 'username':
+        if key == "username":
             return mock_session_state.username
-        if key == 'logged_in':
+        if key == "logged_in":
             return mock_session_state.logged_in
         # Fallback for other keys if needed, though not strictly necessary if only these are used
         return getattr(mock_session_state, key, default)
 
     mock_session_state.get = MagicMock(side_effect=session_get_side_effect)
     mock_st_obj.session_state = mock_session_state
-    
+
     mock_st_obj.cache_data.clear = MagicMock()
     mock_st_obj.rerun = MagicMock()
     mock_st_obj.sidebar = MagicMock()
@@ -93,15 +95,16 @@ def mock_st_environment(monkeypatch, active_user):
     mock_st_obj.dataframe = MagicMock()
     mock_st_obj.line_chart = MagicMock()
 
-
-    patcher = patch('app.st', mock_st_obj)
+    patcher = patch("app.st", mock_st_obj)
     patcher.start()
-    
+
     yield mock_st_obj
-    
+
     patcher.stop()
 
+
 # --- Auth Function Tests ---
+
 
 def test_hash_password():
     password = "testpassword"
@@ -109,13 +112,15 @@ def test_hash_password():
     assert isinstance(hashed, str)
     assert password != hashed
 
+
 def test_verify_password():
     password = "testpassword"
     hashed = app.hash_password(password)
     assert app.verify_password(hashed, password) is True
     assert app.verify_password(hashed, "wrongpassword") is False
 
-def test_create_user_in_db(test_db): # Uses test_db fixture
+
+def test_create_user_in_db(test_db):  # Uses test_db fixture
     # Test successful user creation
     user_id = app.create_user_in_db("testuser_auth", "password123")
     assert user_id is not None
@@ -125,23 +130,26 @@ def test_create_user_in_db(test_db): # Uses test_db fixture
     duplicate_user_id = app.create_user_in_db("testuser_auth", "anotherpassword")
     assert duplicate_user_id is None
 
-def test_get_user_from_db(test_db): # Uses test_db fixture
+
+def test_get_user_from_db(test_db):  # Uses test_db fixture
     app.create_user_in_db("testuser_get", "password123")
-    
-    user = app.get_user_from_db("testuser_get") # Ensure username matches creation
+
+    user = app.get_user_from_db("testuser_get")  # Ensure username matches creation
     assert user is not None
     assert user["username"] == "testuser_get"
 
     non_existent_user = app.get_user_from_db("nonexistentuser")
     assert non_existent_user is None
 
+
 # --- Data Function Tests ---
 
-def test_add_column_if_not_exists(test_db): # Uses test_db fixture
+
+def test_add_column_if_not_exists(test_db):  # Uses test_db fixture
     # This test doesn't involve st.cache_data on the function being tested, so no changes needed here.
     conn = app.get_db_connection()
     c = conn.cursor()
-    
+
     # Test adding a new column
     app._add_column_if_not_exists(c, "users", "email", "TEXT")
     c.execute("PRAGMA table_info(users)")
@@ -153,13 +161,16 @@ def test_add_column_if_not_exists(test_db): # Uses test_db fixture
     c.execute("PRAGMA table_info(users)")
     columns_after_second_call = [row[1] for row in c.fetchall()]
     assert columns == columns_after_second_call
-    
+
     conn.close()
 
-def test_load_table(active_user, monkeypatch): # Uses active_user fixture (which implies test_db)
+
+def test_load_table(
+    active_user, monkeypatch
+):  # Uses active_user fixture (which implies test_db)
     # Temporarily replace the cached function with its original, undecorated version
-    monkeypatch.setattr(app, 'load_table', app.load_table.__wrapped__)
-    
+    monkeypatch.setattr(app, "load_table", app.load_table.__wrapped__)
+
     test_user_id = active_user
     # Test loading an empty table
     df_empty = app.load_table("resistance", test_user_id)
@@ -172,7 +183,7 @@ def test_load_table(active_user, monkeypatch): # Uses active_user fixture (which
     today_str = date.today().isoformat()
     c.execute(
         "INSERT INTO resistance (user_id, date, week, day, exercise, set_number, target, actual_weight, actual_reps, rir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (test_user_id, today_str, 1, "Monday", "Squat", 1, "5x5", 100, 5, 2)
+        (test_user_id, today_str, 1, "Monday", "Squat", 1, "5x5", 100, 5, 2),
     )
     conn.commit()
     conn.close()
@@ -183,24 +194,24 @@ def test_load_table(active_user, monkeypatch): # Uses active_user fixture (which
     assert df_with_data.iloc[0]["exercise"] == "Squat"
 
     # Test loading for another user (who has no data)
-    conn_temp = app.get_db_connection() # Need a connection to create another user
+    conn_temp = app.get_db_connection()  # Need a connection to create another user
     c_temp = conn_temp.cursor()
     # Manually create another user for this specific test case, as active_user is fixed
     other_user_id = app.create_user_in_db("otherdatauser", "pass")
     assert other_user_id is not None
     conn_temp.close()
-    
+
     df_other_user = app.load_table("resistance", other_user_id)
     assert df_other_user.empty is True
-    
+
     # Test loading with None user_id
     df_none_user = app.load_table("resistance", None)
     assert df_none_user.empty is True
 
 
-def test_fetch_last(active_user, monkeypatch): # Uses active_user fixture
+def test_fetch_last(active_user, monkeypatch):  # Uses active_user fixture
     # Temporarily replace the cached function with its original, undecorated version
-    monkeypatch.setattr(app, 'fetch_last', app.fetch_last.__wrapped__)
+    monkeypatch.setattr(app, "fetch_last", app.fetch_last.__wrapped__)
 
     test_user_id = active_user
     # Test fetching when no data exists
@@ -213,13 +224,13 @@ def test_fetch_last(active_user, monkeypatch): # Uses active_user fixture
     today_str = date.today().isoformat()
     c.execute(
         "INSERT INTO resistance (user_id, date, week, day, exercise, set_number, target, actual_weight, actual_reps, rir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (test_user_id, today_str, 1, "Monday", "Squat", 1, "5x5", 100.0, 5, 2)
+        (test_user_id, today_str, 1, "Monday", "Squat", 1, "5x5", 100.0, 5, 2),
     )
     # Insert an older record to ensure the latest is fetched
     older_date_str = (date.today() - pd.Timedelta(days=1)).isoformat()
     c.execute(
         "INSERT INTO resistance (user_id, date, week, day, exercise, set_number, target, actual_weight, actual_reps, rir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (test_user_id, older_date_str, 1, "Monday", "Squat", 1, "5x5", 90.0, 5, 3)
+        (test_user_id, older_date_str, 1, "Monday", "Squat", 1, "5x5", 90.0, 5, 3),
     )
     conn.commit()
     conn.close()
@@ -228,7 +239,7 @@ def test_fetch_last(active_user, monkeypatch): # Uses active_user fixture
     assert weight == 100.0
     assert reps == 5
     assert rir == 2
-    
+
     # Test fetching for an exercise that doesn't exist for the user
     last_other_ex = app.fetch_last("Bench", 1, test_user_id)
     assert last_other_ex == (None, None, None)
@@ -237,16 +248,18 @@ def test_fetch_last(active_user, monkeypatch): # Uses active_user fixture
     last_none_user = app.fetch_last("Squat", 1, None)
     assert last_none_user == (None, None, None)
 
+
 # --- _save_form_data Function Tests ---
 
+
 def test_save_form_data_single_insert(mock_st_environment, active_user):
-    mock_st = mock_st_environment # Get the mocked st object
-    test_user_id = active_user     # Get the user_id from active_user fixture
+    mock_st = mock_st_environment  # Get the mocked st object
+    test_user_id = active_user  # Get the user_id from active_user fixture
 
     today_str = date.today().isoformat()
     query = "INSERT INTO mobility(user_id, date, prep_done, joint_flow_done, animal_circuit_done, cuff_finisher_done) VALUES(?,?,?,?,?,?)"
     payload = (test_user_id, today_str, 1, 1, 0, 0)
-    
+
     app._save_form_data(query, payload, "Saved Mobility")
 
     mock_st.success.assert_called_with("Saved Mobility")
@@ -261,6 +274,7 @@ def test_save_form_data_single_insert(mock_st_environment, active_user):
     assert row["prep_done"] == 1
     conn.close()
 
+
 def test_save_form_data_many_insert(mock_st_environment, active_user):
     mock_st = mock_st_environment
     test_user_id = active_user
@@ -271,7 +285,7 @@ def test_save_form_data_many_insert(mock_st_environment, active_user):
         (test_user_id, today_str, 1, "Mon", "Squat", 1, "5x5", 100, 5, 2),
         (test_user_id, today_str, 1, "Mon", "Squat", 2, "5x5", 100, 5, 1),
     ]
-    
+
     app._save_form_data(query, payload, "Saved Resistance", is_many=True)
 
     mock_st.success.assert_called_with("Saved Resistance")
@@ -284,22 +298,24 @@ def test_save_form_data_many_insert(mock_st_environment, active_user):
     assert count == 2
     conn.close()
 
+
 def test_save_form_data_no_user_logged_in(mock_st_environment):
     mock_st = mock_st_environment
     # Configure the session_state mock for this specific test case
-    mock_st.session_state.user_id = None 
+    mock_st.session_state.user_id = None
     mock_st.session_state.logged_in = False
-    
+
     app._save_form_data("QUERY", (), "Success Message")
-    
+
     mock_st.error.assert_called_with("User not logged in. Cannot save data.")
     mock_st.success.assert_not_called()
     mock_st.cache_data.clear.assert_not_called()
 
+
 def test_save_form_data_empty_payload_for_many(mock_st_environment):
     mock_st = mock_st_environment
     # User is logged in via mock_st_environment fixture
-    
+
     app._save_form_data("QUERY", [], "Success Message", is_many=True)
 
     mock_st.warning.assert_called_with("No data to save.")

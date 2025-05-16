@@ -4,7 +4,7 @@
 
 import streamlit as st
 import pandas as pd
-import sqlite3 # Still needed for sqlite3.Error in _save_form_data
+import sqlite3  # Still needed for sqlite3.Error in _save_form_data
 from datetime import date
 # hashlib will be imported by database.py
 
@@ -15,7 +15,7 @@ from database import (
     hash_password,
     verify_password,
     create_user_in_db,
-    get_user_from_db
+    get_user_from_db,
 )
 
 # --- Page Config & Styles ---
