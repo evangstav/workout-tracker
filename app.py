@@ -17,6 +17,8 @@ from database import (
     create_user_in_db,
     get_user_from_db,
     update_user_password,
+    save_or_update_1rm, # New import
+    get_latest_1rm,    # New import
 )
 
 # --- Page Config & Styles ---
@@ -587,6 +589,59 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         st.error("New passwords do not match.")
                 else:
                     st.error("Incorrect current password.")
+
+        st.divider()
+        st.subheader("Log 1 Rep Max (1RM)")
+        # Define key exercises for 1RM logging
+        # These could also be dynamically sourced or expanded
+        one_rm_exercises = ["Back-squat", "Bench Press", "Deadlift", "Overhead Press"]
+
+        with st.form("log_1rm_form"):
+            rm_exercise = st.selectbox(
+                "Exercise for 1RM",
+                options=one_rm_exercises,
+                key="profile_1rm_exercise"
+            )
+            rm_weight = st.number_input(
+                "1RM Weight (kg)",
+                min_value=0.0,
+                step=0.5,
+                format="%.1f",
+                key="profile_1rm_weight"
+            )
+            rm_date = st.date_input(
+                "Date Achieved/Recorded",
+                date.today(),
+                key="profile_1rm_date"
+            )
+            log_1rm_submitted = st.form_submit_button("Save 1RM")
+
+            if log_1rm_submitted:
+                if rm_exercise and rm_weight > 0:
+                    if save_or_update_1rm(current_user_id, rm_exercise, rm_weight, rm_date.isoformat()):
+                        st.success(f"1RM for {rm_exercise} saved successfully.")
+                        st.cache_data.clear() # Clear cache to reflect new 1RM data if displayed elsewhere
+                    else: # pragma: no cover
+                        st.error("Failed to save 1RM. Database error.")
+                else:
+                    st.error("Please select an exercise and enter a valid 1RM weight.")
+
+        st.divider()
+        st.subheader("Latest Logged 1RMs")
+        latest_1rms_data = []
+        for ex in one_rm_exercises:
+            latest_rm = get_latest_1rm(current_user_id, ex)
+            if latest_rm:
+                latest_1rms_data.append({
+                    "Exercise": ex,
+                    "1RM (kg)": latest_rm["one_rep_max"],
+                    "Date": pd.to_datetime(latest_rm["date"]).strftime('%Y-%m-%d')
+                })
+
+        if latest_1rms_data:
+            st.dataframe(pd.DataFrame(latest_1rms_data), use_container_width=True)
+        else:
+            st.write("No 1RMs logged yet.")
 
 
     # Logs Tab

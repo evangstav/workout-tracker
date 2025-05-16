@@ -99,6 +99,17 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
+    # User 1RM table
+    c.execute("""CREATE TABLE IF NOT EXISTS user_1rm(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        exercise TEXT NOT NULL,
+        one_rep_max REAL NOT NULL,
+        date TEXT NOT NULL, -- Date the 1RM was achieved or recorded
+        UNIQUE(user_id, exercise, date), -- Ensure unique 1RM per user, exercise, and date
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     first_user = c.fetchone()
@@ -147,6 +158,50 @@ def create_user_in_db(username, password):
         return None
     finally:
         conn.close()
+
+
+def save_or_update_1rm(user_id, exercise, one_rep_max, rm_date):
+    """Saves or updates a 1RM for a given user, exercise, and date.
+    If a record for the exact user, exercise, and date exists, it updates it.
+    Otherwise, it inserts a new record.
+    """
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        # Try to update first if a record for that specific date exists
+        c.execute("""
+            UPDATE user_1rm SET one_rep_max = ?
+            WHERE user_id = ? AND exercise = ? AND date = ?
+        """, (one_rep_max, user_id, exercise, rm_date))
+
+        if c.rowcount == 0: # No record for that date, so insert
+            c.execute("""
+                INSERT INTO user_1rm (user_id, exercise, one_rep_max, date)
+                VALUES (?, ?, ?, ?)
+            """, (user_id, exercise, one_rep_max, rm_date))
+        conn.commit()
+        return True
+    except sqlite3.Error: # pragma: no cover
+        # Could be IntegrityError if UNIQUE constraint is violated by a different path,
+        # or other errors.
+        return False
+    finally:
+        conn.close()
+
+
+def get_latest_1rm(user_id, exercise):
+    """Fetches the most recent 1RM for a given user and exercise."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT one_rep_max, date FROM user_1rm
+        WHERE user_id = ? AND exercise = ?
+        ORDER BY date DESC
+        LIMIT 1
+    """, (user_id, exercise))
+    result = c.fetchone()
+    conn.close()
+    return result # Returns a Row object (e.g., result['one_rep_max']) or None
 
 
 def get_user_from_db(username):

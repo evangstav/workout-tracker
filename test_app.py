@@ -172,6 +172,74 @@ def test_update_user_password(test_db): # Uses test_db fixture
                                # No rows affected is not an error. This is acceptable.
 
 
+def test_save_or_update_1rm(active_user): # Uses active_user fixture (which implies test_db)
+    user_id = active_user
+    exercise = "Back-squat"
+    today_iso = date.today().isoformat()
+    tomorrow_iso = (date.today() + pd.Timedelta(days=1)).isoformat()
+
+    # 1. Save a new 1RM
+    success_save = database.save_or_update_1rm(user_id, exercise, 100.0, today_iso)
+    assert success_save is True
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT one_rep_max, date FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    result = c.fetchone()
+    assert result is not None
+    assert result["one_rep_max"] == 100.0
+    conn.close()
+
+    # 2. Update an existing 1RM for the same date
+    success_update = database.save_or_update_1rm(user_id, exercise, 105.0, today_iso)
+    assert success_update is True
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT one_rep_max FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    result = c.fetchone()
+    assert result["one_rep_max"] == 105.0
+    # Ensure only one record for that date
+    c.execute("SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    count = c.fetchone()[0]
+    assert count == 1
+    conn.close()
+
+    # 3. Save a new 1RM for a different date (should be a new record)
+    success_save_new_date = database.save_or_update_1rm(user_id, exercise, 110.0, tomorrow_iso)
+    assert success_save_new_date is True
+    conn = database.get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ?", (user_id, exercise))
+    count = c.fetchone()[0]
+    assert count == 2 # One for today, one for tomorrow
+    conn.close()
+
+
+def test_get_latest_1rm(active_user): # Uses active_user fixture
+    user_id = active_user
+    exercise = "Bench Press"
+    today_iso = date.today().isoformat()
+    yesterday_iso = (date.today() - pd.Timedelta(days=1)).isoformat()
+    day_before_yesterday_iso = (date.today() - pd.Timedelta(days=2)).isoformat()
+
+    # 1. No 1RM logged yet
+    latest = database.get_latest_1rm(user_id, exercise)
+    assert latest is None
+
+    # 2. Log some 1RMs
+    database.save_or_update_1rm(user_id, exercise, 80.0, yesterday_iso)
+    database.save_or_update_1rm(user_id, exercise, 75.0, day_before_yesterday_iso)
+    database.save_or_update_1rm(user_id, exercise, 82.5, today_iso) # Most recent
+
+    latest = database.get_latest_1rm(user_id, exercise)
+    assert latest is not None
+    assert latest["one_rep_max"] == 82.5
+    assert latest["date"] == today_iso
+
+    # 3. Check for an exercise with no 1RMs
+    latest_other_ex = database.get_latest_1rm(user_id, "Deadlift")
+    assert latest_other_ex is None
+
+
 # --- Data Function Tests ---
 
 
