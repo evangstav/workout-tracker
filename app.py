@@ -415,7 +415,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             d = st.date_input("Date", date.today())
             week = st.selectbox("Week", [1, 2, 3, 4])
             day = st.selectbox("Day", list(weekly_resistance.keys()))
-            ex = st.selectbox("Exercise", [e["exercise"] for e in weekly_resistance[day]])
+            ex = st.selectbox(
+                "Exercise", [e["exercise"] for e in weekly_resistance[day]]
+            )
         with c2:
             target = next(
                 e["target"] for e in weekly_resistance[day] if e["exercise"] == ex
@@ -439,7 +441,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 rir = st.slider("RIR", 0, 5, int(i0 or 3), key=f"res_i_{i}")
                 pw, pr, pi = aw, ar, rir
                 # Add user_id to the entry
-                entries.append((current_user_id, d, week, day, ex, i, target, aw, ar, rir))
+                entries.append(
+                    (current_user_id, d, week, day, ex, i, target, aw, ar, rir)
+                )
         if st.button("Save Resistance"):
             # The 'if not entries' check is specific and remains here.
             # The user login check is handled by _save_form_data.
@@ -462,7 +466,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         a = st.checkbox("Animal Circuit (Beast, Ape, Scorpion, Crab, Side Kick)")
         cf = st.checkbox("Cuff Finisher (Band ER, Prone Y)")
         if st.button("Save Mobility"):
-            current_user_id = st.session_state.user_id  # Needed to construct data_payload
+            current_user_id = (
+                st.session_state.user_id
+            )  # Needed to construct data_payload
             # User login check is handled by _save_form_data.
             data_payload = (current_user_id, d, int(p), int(j), int(a), int(cf))
             _save_form_data(
@@ -482,7 +488,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         dur = dcol.number_input("Duration (min)", 1, 180, 30, key="car_dur")
         hr = hcol.number_input("Avg HR (bpm)", 30, 220, 120, key="car_hr")
         if st.button("Save Cardio"):
-            current_user_id = st.session_state.user_id  # Needed to construct data_payload
+            current_user_id = (
+                st.session_state.user_id
+            )  # Needed to construct data_payload
             # User login check is handled by _save_form_data.
             data_payload = (current_user_id, d, t, dur, hr)
             _save_form_data(
