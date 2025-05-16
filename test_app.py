@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import sqlite3
 import pandas as pd
 from datetime import date
+import os # For managing temporary test database file
 
 # Before importing app, we need to ensure Streamlit's st object is minimally mocked
 # if we want to avoid errors for st.set_page_config, etc., during import.
@@ -11,17 +12,23 @@ from datetime import date
 
 import app  # This will run app.init_db() with the production DB_NAME once.
 
+
+TEST_DB_FILE = "test_workout_tracker.db"
+
 class TestAuthFunctions(unittest.TestCase):
     def setUp(self):
         self.original_db_name = app.DB_NAME
-        app.DB_NAME = ":memory:"  # Use in-memory SQLite database for tests
-        # We need to explicitly call init_db for the in-memory database.
-        # init_db itself creates tables.
-        conn = app.get_db_connection()
-        app.init_db() # Re-initialize DB schema in memory
-        conn.close()
+        app.DB_NAME = TEST_DB_FILE
+        # Ensure a clean database for each test
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
+        app.init_db() # Initialize schema in the test DB file
 
     def tearDown(self):
+        # It's good practice to ensure connections are closed if any were held by the test instance
+        # In this case, app functions manage their own connections.
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
         app.DB_NAME = self.original_db_name
 
     def test_hash_password(self):
@@ -60,15 +67,18 @@ class TestAuthFunctions(unittest.TestCase):
 class TestDataFunctions(unittest.TestCase):
     def setUp(self):
         self.original_db_name = app.DB_NAME
-        app.DB_NAME = ":memory:"
-        app.init_db() # Initialize schema in the in-memory DB
+        app.DB_NAME = TEST_DB_FILE
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
+        app.init_db() # Initialize schema in the test DB file
 
         # Create a test user for data operations
         self.test_user_id = app.create_user_in_db("datauser", "datapass")
         self.assertIsNotNone(self.test_user_id, "Setup failed: Could not create test user")
 
-
     def tearDown(self):
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
         app.DB_NAME = self.original_db_name
 
     def test_add_column_if_not_exists(self):
@@ -160,7 +170,9 @@ class TestDataFunctions(unittest.TestCase):
 class TestSaveFormDataFunction(unittest.TestCase):
     def setUp(self):
         self.original_db_name = app.DB_NAME
-        app.DB_NAME = ":memory:"
+        app.DB_NAME = TEST_DB_FILE
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
         app.init_db()
         self.test_user_id = app.create_user_in_db("saveuser", "savepass")
         self.assertIsNotNone(self.test_user_id)
@@ -177,6 +189,8 @@ class TestSaveFormDataFunction(unittest.TestCase):
 
     def tearDown(self):
         self.patcher_st.stop()
+        if os.path.exists(TEST_DB_FILE):
+            os.remove(TEST_DB_FILE)
         app.DB_NAME = self.original_db_name
 
     def test_save_form_data_single_insert(self):
