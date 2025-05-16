@@ -110,6 +110,17 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
+    # User 1RM table
+    c.execute("""CREATE TABLE IF NOT EXISTS user_1rm(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        exercise TEXT NOT NULL,
+        one_rep_max REAL NOT NULL,
+        date TEXT NOT NULL, -- Date the 1RM was achieved or recorded
+        UNIQUE(user_id, exercise, date), -- Ensure unique 1RM per user, exercise, and date
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     first_user = c.fetchone()
