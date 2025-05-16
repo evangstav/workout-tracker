@@ -252,7 +252,7 @@ def show_login_signup_forms():
                     st.session_state.user_id = user["id"]
                     st.session_state.username = user["username"]
                     st.cache_data.clear()  # Clear cache on login
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.sidebar.error("Invalid username or password")
 
@@ -296,7 +296,7 @@ else:
         st.session_state.user_id = None
         st.session_state.username = None
         st.cache_data.clear()  # Clear cache on logout
-        st.experimental_rerun()
+        st.rerun()
 
     # --- Main Application with Tabs (only if logged in) ---
     tabs = st.tabs(["Guide", "Resistance", "Mobility", "Cardio", "Logs"])
