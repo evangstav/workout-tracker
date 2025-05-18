@@ -763,5 +763,37 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                     if not chart_data.empty:
                         st.markdown(f"**{lift} - Max Weight Over Time**")
                         st.line_chart(chart_data, use_container_width=True, height=200)
+
+                # Chart for Total Volume (Weight * Reps) per exercise
+                for lift in df_resistance["exercise"].unique():
+                    ddf = df_resistance[
+                        df_resistance["exercise"] == lift
+                    ].copy()
+                    ddf["date"] = pd.to_datetime(ddf["date"])
+                    ddf["volume"] = ddf["actual_weight"] * ddf["actual_reps"]
+                    chart_data_volume = (
+                        ddf.sort_values(by="date")
+                        .groupby(pd.Grouper(key="date", freq="D"))["volume"]
+                        .sum()
+                        .fillna(0)
+                    )
+                    if not chart_data_volume.empty:
+                        st.markdown(f"**{lift} - Total Volume (kg*reps) Over Time**")
+                        st.line_chart(chart_data_volume, use_container_width=True, height=200)
+
+                # Chart for Total Reps for Weighted Pull-ups
+                pullup_exercise_name = "Weighted Pull-up" # Ensure this matches the exercise name in your data
+                if pullup_exercise_name in df_resistance["exercise"].unique():
+                    pullup_df = df_resistance[df_resistance["exercise"] == pullup_exercise_name].copy()
+                    pullup_df["date"] = pd.to_datetime(pullup_df["date"])
+                    chart_data_pullup_reps = (
+                        pullup_df.sort_values(by="date")
+                        .groupby(pd.Grouper(key="date", freq="D"))["actual_reps"]
+                        .sum()
+                        .fillna(0)
+                    )
+                    if not chart_data_pullup_reps.empty:
+                        st.markdown(f"**{pullup_exercise_name} - Total Reps Over Time**")
+                        st.line_chart(chart_data_pullup_reps, use_container_width=True, height=200)
             else:
                 st.write("No resistance data yet to display charts.")
