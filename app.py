@@ -745,45 +745,50 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             st.subheader("Cardio")
             st.dataframe(load_table("cardio", current_user_id))
 
-            st.subheader("Progress Charts")
+            st.subheader("Progress Charts (Resistance)")
             df_resistance = load_table("resistance", current_user_id)
+
             if not df_resistance.empty:
-                for lift in df_resistance["exercise"].unique():
-                    ddf = df_resistance[
-                        df_resistance["exercise"] == lift
-                    ].copy()  # Use .copy() to avoid SettingWithCopyWarning
-                    ddf["date"] = pd.to_datetime(ddf["date"])
-                    # Ensure data is sorted by date for charting max weight over time
-                    chart_data = (
-                        ddf.sort_values(by="date")
-                        .groupby(pd.Grouper(key="date", freq="D"))["actual_weight"]
-                        .max()
-                        .fillna(0)
-                    )
-                    if not chart_data.empty:
-                        st.markdown(f"**{lift} - Max Weight Over Time**")
-                        st.line_chart(chart_data, use_container_width=True, height=200)
+                unique_exercises = df_resistance["exercise"].unique()
 
-                # Chart for Total Volume (Weight * Reps) per exercise
-                for lift in df_resistance["exercise"].unique():
-                    ddf = df_resistance[
-                        df_resistance["exercise"] == lift
-                    ].copy()
-                    ddf["date"] = pd.to_datetime(ddf["date"])
-                    ddf["volume"] = ddf["actual_weight"] * ddf["actual_reps"]
-                    chart_data_volume = (
-                        ddf.sort_values(by="date")
-                        .groupby(pd.Grouper(key="date", freq="D"))["volume"]
-                        .sum()
-                        .fillna(0)
-                    )
-                    if not chart_data_volume.empty:
-                        st.markdown(f"**{lift} - Total Volume (kg*reps) Over Time**")
-                        st.line_chart(chart_data_volume, use_container_width=True, height=200)
+                for lift in unique_exercises:
+                    with st.expander(f"Charts for {lift}"):
+                        # Filter data for the current exercise
+                        exercise_df = df_resistance[df_resistance["exercise"] == lift].copy()
+                        exercise_df["date"] = pd.to_datetime(exercise_df["date"])
 
-                # Chart for Total Reps for Weighted Pull-ups
-                pullup_exercise_name = "Weighted Pull-up" # Ensure this matches the exercise name in your data
-                if pullup_exercise_name in df_resistance["exercise"].unique():
+                        # Max Weight Over Time chart
+                        chart_data_max_weight = (
+                            exercise_df.sort_values(by="date")
+                            .groupby(pd.Grouper(key="date", freq="D"))["actual_weight"]
+                            .max()
+                            .fillna(0)
+                        )
+                        if not chart_data_max_weight.empty:
+                            st.markdown(f"**Max Weight Over Time**")
+                            st.line_chart(chart_data_max_weight, use_container_width=True, height=200)
+                        else: # pragma: no cover
+                            st.write("No max weight data to display for this exercise.")
+
+                        # Total Volume (Weight * Reps) Over Time chart
+                        exercise_df["volume"] = exercise_df["actual_weight"] * exercise_df["actual_reps"]
+                        chart_data_volume = (
+                            exercise_df.sort_values(by="date")
+                            .groupby(pd.Grouper(key="date", freq="D"))["volume"]
+                            .sum()
+                            .fillna(0)
+                        )
+                        if not chart_data_volume.empty:
+                            st.markdown(f"**Total Volume (kg*reps) Over Time**")
+                            st.line_chart(chart_data_volume, use_container_width=True, height=200)
+                        else: # pragma: no cover
+                            st.write("No volume data to display for this exercise.")
+
+                # Special chart for Total Reps for Weighted Pull-ups (if it's a distinct requirement)
+                pullup_exercise_name = "Weighted Pull-up"
+                if pullup_exercise_name in unique_exercises:
+                    st.markdown("---") # Visual separator
+                    st.markdown(f"**{pullup_exercise_name} - Total Reps Over Time**")
                     pullup_df = df_resistance[df_resistance["exercise"] == pullup_exercise_name].copy()
                     pullup_df["date"] = pd.to_datetime(pullup_df["date"])
                     chart_data_pullup_reps = (
@@ -793,7 +798,8 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         .fillna(0)
                     )
                     if not chart_data_pullup_reps.empty:
-                        st.markdown(f"**{pullup_exercise_name} - Total Reps Over Time**")
                         st.line_chart(chart_data_pullup_reps, use_container_width=True, height=200)
+                    else: # pragma: no cover
+                        st.write(f"No reps data to display for {pullup_exercise_name}.")
             else:
                 st.write("No resistance data yet to display charts.")
