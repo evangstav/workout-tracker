@@ -6,21 +6,18 @@ import streamlit as st
 import pandas as pd
 import sqlite3  # Still needed for sqlite3.Error in _save_form_data
 from datetime import date
-import re # For parsing target strings
+import re  # For parsing target strings
 from typing import List, Tuple, Dict, Any, Optional, Union
-# hashlib will be imported by database.py
 
 from database import (
-    DB_NAME,
     get_db_connection,
     init_db,
-    hash_password,
     verify_password,
     create_user_in_db,
     get_user_from_db,
     update_user_password,
-    save_or_update_1rm, # New import
-    get_latest_1rm,    # New import
+    save_or_update_1rm,  # New import
+    get_latest_1rm,  # New import
 )
 
 # --- Page Config & Styles ---
@@ -93,15 +90,18 @@ weekly_resistance: Dict[str, List[Dict[str, str]]] = {
 # --- Helpers ---
 # Note: The global 'conn' object is removed. Connections are now managed per function.
 
+
 # Helper function to parse target string for current set's percentage and reps
-def get_target_params_for_set(target_string: str, current_set_num: int) -> Tuple[Optional[int], Optional[int]]:
+def get_target_params_for_set(
+    target_string: str, current_set_num: int
+) -> Tuple[Optional[int], Optional[int]]:
     """
     Parses the target string (e.g., "1x4 @88% + 3x6-8 @78%") for a specific set number.
     Returns a tuple (percentage, reps_value).
     reps_value is an int if a specific number or first number of a range is found.
     Returns (None, None) if not found or not applicable for either.
     """
-    segments = target_string.split('+')
+    segments = target_string.split("+")
     processed_sets_count = 0
     for segment in segments:
         segment = segment.strip()
@@ -122,37 +122,39 @@ def get_target_params_for_set(target_string: str, current_set_num: int) -> Tuple
             num_sets_in_segment = int(match_without_percentage.group(1))
             reps_str_in_segment = match_without_percentage.group(2)
         else:
-            continue # Segment format not recognized
+            continue  # Segment format not recognized
 
-        if current_set_num > processed_sets_count and \
-           current_set_num <= processed_sets_count + num_sets_in_segment:
+        if (
+            current_set_num > processed_sets_count
+            and current_set_num <= processed_sets_count + num_sets_in_segment
+        ):
             reps_val = None
             if reps_str_in_segment:
                 try:
                     reps_val = int(reps_str_in_segment)
                 except ValueError:
                     # Try parsing first number of a range like "6-8" or "6–8"
-                    if '–' in reps_str_in_segment: # en-dash
+                    if "–" in reps_str_in_segment:  # en-dash
                         try:
-                            reps_val = int(reps_str_in_segment.split('–')[0])
-                        except ValueError: # pragma: no cover
-                            pass # Keep reps_val as None
-                    elif '-' in reps_str_in_segment: # hyphen
+                            reps_val = int(reps_str_in_segment.split("–")[0])
+                        except ValueError:  # pragma: no cover
+                            pass  # Keep reps_val as None
+                    elif "-" in reps_str_in_segment:  # hyphen
                         try:
-                            reps_val = int(reps_str_in_segment.split('-')[0])
-                        except ValueError: # pragma: no cover
-                            pass # Keep reps_val as None
+                            reps_val = int(reps_str_in_segment.split("-")[0])
+                        except ValueError:  # pragma: no cover
+                            pass  # Keep reps_val as None
             return percentage_in_segment, reps_val
 
         processed_sets_count += num_sets_in_segment
-    return None, None # No specific parameters found for this set number
+    return None, None  # No specific parameters found for this set number
 
 
 def _save_form_data(
     insert_query: str,
     data_payload: Union[Tuple[Any, ...], List[Tuple[Any, ...]]],
     success_message: str,
-    is_many: bool = False
+    is_many: bool = False,
 ) -> None:
     """Helper to save form data to the database."""
     if st.session_state.user_id is None:  # General check for logged-in user
@@ -200,7 +202,9 @@ def load_table(name: str, user_id: Optional[int]) -> pd.DataFrame:
 
 
 @st.cache_data  # Cache will be specific to user_id
-def fetch_last(exercise: str, set_num: int, user_id: Optional[int]) -> Tuple[Optional[float], Optional[int], Optional[int]]:
+def fetch_last(
+    exercise: str, set_num: int, user_id: Optional[int]
+) -> Tuple[Optional[float], Optional[int], Optional[int]]:
     conn = get_db_connection()
     # Ensure user_id is not None
     if user_id is None:
@@ -367,13 +371,13 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             repeat = st.checkbox("Repeat last session")
             sets = st.number_input("# Sets", 1, 10, 3)
         entries = []
-        pw, pr, pi = None, None, None # Previous set's weight, reps, RIR
+        pw, pr, pi = None, None, None  # Previous set's weight, reps, RIR
         current_user_id = st.session_state.user_id
-        SLIDER_STEP = 0.5 # Define slider step for weight
-        MAX_WEIGHT_SLIDER = 150.0 # Max weight for slider
+        SLIDER_STEP = 0.5  # Define slider step for weight
+        MAX_WEIGHT_SLIDER = 150.0  # Max weight for slider
 
-        for i in range(1, sets + 1): # For each set
-            w0, r0, i0 = None, None, None # Default values for current set's sliders
+        for i in range(1, sets + 1):  # For each set
+            w0, r0, i0 = None, None, None  # Default values for current set's sliders
 
             if repeat:
                 # If repeating last session, fetch data for this specific set number
@@ -382,7 +386,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             else:
                 # Not repeating: try to calculate from 1RM or use previous set's values
                 one_rm_data = get_latest_1rm(current_user_id, ex)
-                target_percentage, target_reps_prog = get_target_params_for_set(target, i)
+                target_percentage, target_reps_prog = get_target_params_for_set(
+                    target, i
+                )
 
                 # Initialize with previous set's values (or None if first set)
                 w0_prev, r0_prev, i0_prev = pw, pr, pi
@@ -391,10 +397,12 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 if one_rm_data and target_percentage is not None:
                     one_rm_value = one_rm_data["one_rep_max"]
                     calculated_w = (target_percentage / 100.0) * one_rm_value
-                    w0 = round(calculated_w / SLIDER_STEP) * SLIDER_STEP # Use calculated weight
+                    w0 = (
+                        round(calculated_w / SLIDER_STEP) * SLIDER_STEP
+                    )  # Use calculated weight
 
                     if target_reps_prog is not None:
-                        r0 = target_reps_prog # Use reps from program if available
+                        r0 = target_reps_prog  # Use reps from program if available
                     # If target_reps_prog is None, r0 remains r0_prev (from previous set or None)
                     # i0 remains i0_prev (from previous set or None)
                 # If no 1RM or no target_percentage, w0, r0, i0 remain as previous set's values
@@ -402,12 +410,25 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             with st.expander(f"Set {i}"):
                 # Use (w0 or 0) for weight, (r0 or 6) for reps, (i0 or 3) for RIR as slider defaults
                 aw = st.slider(
-                    "Weight (kg)", 0.0, MAX_WEIGHT_SLIDER, float(w0 if w0 is not None else 0), step=SLIDER_STEP, key=f"res_w_{i}"
+                    "Weight (kg)",
+                    0.0,
+                    MAX_WEIGHT_SLIDER,
+                    float(w0 if w0 is not None else 0),
+                    step=SLIDER_STEP,
+                    key=f"res_w_{i}",
                 )
-                ar = st.slider("Reps", 1, 20, int(r0 if r0 is not None else 6), key=f"res_r_{i}")
-                rir = st.slider("RIR", 0, 5, int(i0 if i0 is not None else 3), key=f"res_i_{i}")
+                ar = st.slider(
+                    "Reps", 1, 20, int(r0 if r0 is not None else 6), key=f"res_r_{i}"
+                )
+                rir = st.slider(
+                    "RIR", 0, 5, int(i0 if i0 is not None else 3), key=f"res_i_{i}"
+                )
 
-                pw, pr, pi = aw, ar, rir # Update previous set's values for the next iteration
+                pw, pr, pi = (
+                    aw,
+                    ar,
+                    rir,
+                )  # Update previous set's values for the next iteration
                 # Add user_id to the entry
                 entries.append(
                     (current_user_id, d, week, day, ex, i, target, aw, ar, rir)
@@ -656,19 +677,33 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         st.divider()
         st.subheader("Change Password")
         with st.form("change_password_form"):
-            current_password = st.text_input("Current Password", type="password", key="profile_current_password")
-            new_password = st.text_input("New Password (min 4 chars)", type="password", key="profile_new_password")
-            confirm_new_password = st.text_input("Confirm New Password", type="password", key="profile_confirm_new_password")
+            current_password = st.text_input(
+                "Current Password", type="password", key="profile_current_password"
+            )
+            new_password = st.text_input(
+                "New Password (min 4 chars)",
+                type="password",
+                key="profile_new_password",
+            )
+            confirm_new_password = st.text_input(
+                "Confirm New Password",
+                type="password",
+                key="profile_confirm_new_password",
+            )
             change_password_submitted = st.form_submit_button("Change Password")
 
             if change_password_submitted:
-                user = get_user_from_db(st.session_state.username) # Fetch current user details
+                user = get_user_from_db(
+                    st.session_state.username
+                )  # Fetch current user details
                 if user and verify_password(user["password_hash"], current_password):
                     if new_password == confirm_new_password:
                         if len(new_password) >= 4:
-                            if update_user_password(st.session_state.user_id, new_password):
+                            if update_user_password(
+                                st.session_state.user_id, new_password
+                            ):
                                 st.success("Password updated successfully.")
-                            else: # pragma: no cover
+                            else:  # pragma: no cover
                                 st.error("Failed to update password. Database error.")
                         else:
                             st.error("New password must be at least 4 characters long.")
@@ -685,30 +720,28 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
 
         with st.form("log_1rm_form"):
             rm_exercise = st.selectbox(
-                "Exercise for 1RM",
-                options=one_rm_exercises,
-                key="profile_1rm_exercise"
+                "Exercise for 1RM", options=one_rm_exercises, key="profile_1rm_exercise"
             )
             rm_weight = st.number_input(
                 "1RM Weight (kg)",
                 min_value=0.0,
                 step=0.5,
                 format="%.1f",
-                key="profile_1rm_weight"
+                key="profile_1rm_weight",
             )
             rm_date = st.date_input(
-                "Date Achieved/Recorded",
-                date.today(),
-                key="profile_1rm_date"
+                "Date Achieved/Recorded", date.today(), key="profile_1rm_date"
             )
             log_1rm_submitted = st.form_submit_button("Save 1RM")
 
             if log_1rm_submitted:
                 if rm_exercise and rm_weight > 0:
-                    if save_or_update_1rm(current_user_id, rm_exercise, rm_weight, rm_date.isoformat()):
+                    if save_or_update_1rm(
+                        current_user_id, rm_exercise, rm_weight, rm_date.isoformat()
+                    ):
                         st.success(f"1RM for {rm_exercise} saved successfully.")
-                        st.cache_data.clear() # Clear cache to reflect new 1RM data if displayed elsewhere
-                    else: # pragma: no cover
+                        st.cache_data.clear()  # Clear cache to reflect new 1RM data if displayed elsewhere
+                    else:  # pragma: no cover
                         st.error("Failed to save 1RM. Database error.")
                 else:
                     st.error("Please select an exercise and enter a valid 1RM weight.")
@@ -719,17 +752,18 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         for ex in one_rm_exercises:
             latest_rm = get_latest_1rm(current_user_id, ex)
             if latest_rm:
-                latest_1rms_data.append({
-                    "Exercise": ex,
-                    "1RM (kg)": latest_rm["one_rep_max"],
-                    "Date": pd.to_datetime(latest_rm["date"]).strftime('%Y-%m-%d')
-                })
+                latest_1rms_data.append(
+                    {
+                        "Exercise": ex,
+                        "1RM (kg)": latest_rm["one_rep_max"],
+                        "Date": pd.to_datetime(latest_rm["date"]).strftime("%Y-%m-%d"),
+                    }
+                )
 
         if latest_1rms_data:
             st.dataframe(pd.DataFrame(latest_1rms_data), use_container_width=True)
         else:
             st.write("No 1RMs logged yet.")
-
 
     # Logs Tab
     with tabs[5]:  # Index updated from 4 to 5
@@ -754,7 +788,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 for lift in unique_exercises:
                     with st.expander(f"Charts for {lift}"):
                         # Filter data for the current exercise
-                        exercise_df = df_resistance[df_resistance["exercise"] == lift].copy()
+                        exercise_df = df_resistance[
+                            df_resistance["exercise"] == lift
+                        ].copy()
                         exercise_df["date"] = pd.to_datetime(exercise_df["date"])
 
                         # Max Weight Over Time chart
@@ -766,12 +802,18 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         )
                         if not chart_data_max_weight.empty:
                             st.markdown(f"**Max Weight Over Time**")
-                            st.line_chart(chart_data_max_weight, use_container_width=True, height=200)
-                        else: # pragma: no cover
+                            st.line_chart(
+                                chart_data_max_weight,
+                                use_container_width=True,
+                                height=200,
+                            )
+                        else:  # pragma: no cover
                             st.write("No max weight data to display for this exercise.")
 
                         # Total Volume (Weight * Reps) Over Time chart
-                        exercise_df["volume"] = exercise_df["actual_weight"] * exercise_df["actual_reps"]
+                        exercise_df["volume"] = (
+                            exercise_df["actual_weight"] * exercise_df["actual_reps"]
+                        )
                         chart_data_volume = (
                             exercise_df.sort_values(by="date")
                             .groupby(pd.Grouper(key="date", freq="D"))["volume"]
@@ -780,25 +822,35 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         )
                         if not chart_data_volume.empty:
                             st.markdown(f"**Total Volume (kg*reps) Over Time**")
-                            st.line_chart(chart_data_volume, use_container_width=True, height=200)
-                        else: # pragma: no cover
+                            st.line_chart(
+                                chart_data_volume, use_container_width=True, height=200
+                            )
+                        else:  # pragma: no cover
                             st.write("No volume data to display for this exercise.")
 
                         # If the current exercise is "Weighted Pull-up", add the total reps chart
                         pullup_exercise_name = "Weighted Pull-up"
                         if lift == pullup_exercise_name:
-                            st.markdown("---") # Visual separator within the expander
+                            st.markdown("---")  # Visual separator within the expander
                             st.markdown(f"**Total Reps Over Time**")
                             # Data for pull-up reps (already filtered as exercise_df)
                             chart_data_pullup_reps = (
                                 exercise_df.sort_values(by="date")
-                                .groupby(pd.Grouper(key="date", freq="D"))["actual_reps"]
+                                .groupby(pd.Grouper(key="date", freq="D"))[
+                                    "actual_reps"
+                                ]
                                 .sum()
                                 .fillna(0)
                             )
                             if not chart_data_pullup_reps.empty:
-                                st.line_chart(chart_data_pullup_reps, use_container_width=True, height=200)
-                            else: # pragma: no cover
-                                st.write(f"No reps data to display for {pullup_exercise_name}.")
+                                st.line_chart(
+                                    chart_data_pullup_reps,
+                                    use_container_width=True,
+                                    height=200,
+                                )
+                            else:  # pragma: no cover
+                                st.write(
+                                    f"No reps data to display for {pullup_exercise_name}."
+                                )
             else:
                 st.write("No resistance data yet to display charts.")
