@@ -1,19 +1,20 @@
 import sqlite3
 import hashlib
+from typing import Optional, Union
 
 # --- Database Setup & Migration ---
 DB_NAME = "workout_tracker.db"
 
 
-def get_db_connection():
+def get_db_connection() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_NAME, check_same_thread=False)
     conn.row_factory = sqlite3.Row  # Access columns by name
     return conn
 
 
 def _add_column_if_not_exists(
-    cursor, table_name, column_name, column_type_with_constraints
-):
+    cursor: sqlite3.Cursor, table_name: str, column_name: str, column_type_with_constraints: str
+) -> None:
     """Helper to add a column to a table if it doesn't already exist."""
     cursor.execute(f"PRAGMA table_info({table_name})")
     columns = [row[1] for row in cursor.fetchall()]
@@ -31,7 +32,7 @@ def _add_column_if_not_exists(
                 raise
 
 
-def init_db():
+def init_db() -> None:
     conn = get_db_connection()
     c = conn.cursor()
 
@@ -110,17 +111,6 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
-    # User 1RM table
-    c.execute("""CREATE TABLE IF NOT EXISTS user_1rm(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        exercise TEXT NOT NULL,
-        one_rep_max REAL NOT NULL,
-        date TEXT NOT NULL, -- Date the 1RM was achieved or recorded
-        UNIQUE(user_id, exercise, date), -- Ensure unique 1RM per user, exercise, and date
-        FOREIGN KEY (user_id) REFERENCES users(id)
-    )""")
-
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     first_user = c.fetchone()
@@ -146,15 +136,15 @@ def init_db():
 
 
 # --- Authentication Helpers ---
-def hash_password(password):
+def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def verify_password(stored_password_hash, provided_password):
+def verify_password(stored_password_hash: str, provided_password: str) -> bool:
     return stored_password_hash == hash_password(provided_password)
 
 
-def create_user_in_db(username, password):
+def create_user_in_db(username: str, password: str) -> Optional[int]:
     conn = get_db_connection()
     c = conn.cursor()
     try:
@@ -171,7 +161,7 @@ def create_user_in_db(username, password):
         conn.close()
 
 
-def save_or_update_1rm(user_id, exercise, one_rep_max, rm_date):
+def save_or_update_1rm(user_id: int, exercise: str, one_rep_max: float, rm_date: str) -> bool:
     """Saves or updates a 1RM for a given user, exercise, and date.
     If a record for the exact user, exercise, and date exists, it updates it.
     Otherwise, it inserts a new record.
@@ -200,7 +190,7 @@ def save_or_update_1rm(user_id, exercise, one_rep_max, rm_date):
         conn.close()
 
 
-def get_latest_1rm(user_id, exercise):
+def get_latest_1rm(user_id: int, exercise: str) -> Optional[sqlite3.Row]:
     """Fetches the most recent 1RM for a given user and exercise."""
     conn = get_db_connection()
     c = conn.cursor()
@@ -215,7 +205,7 @@ def get_latest_1rm(user_id, exercise):
     return result # Returns a Row object (e.g., result['one_rep_max']) or None
 
 
-def get_user_from_db(username):
+def get_user_from_db(username: str) -> Optional[sqlite3.Row]:
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM users WHERE username = ?", (username,))
@@ -224,7 +214,7 @@ def get_user_from_db(username):
     return user
 
 
-def update_user_password(user_id, new_password):
+def update_user_password(user_id: int, new_password: str) -> bool:
     """Updates the password_hash for a given user_id."""
     conn = get_db_connection()
     c = conn.cursor()

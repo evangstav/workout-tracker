@@ -7,6 +7,7 @@ import pandas as pd
 import sqlite3  # Still needed for sqlite3.Error in _save_form_data
 from datetime import date
 import re # For parsing target strings
+from typing import List, Tuple, Dict, Any, Optional, Union
 # hashlib will be imported by database.py
 
 from database import (
@@ -68,7 +69,7 @@ if "logged_in" not in st.session_state:
 
 # --- Program Definitions ---
 # (This remains global as it's program structure, not user data)
-weekly_resistance = {
+weekly_resistance: Dict[str, List[Dict[str, str]]] = {
     "Monday": [
         {"exercise": "Back-squat", "target": "1×4 @88% + 3×6 @78%"},
         {"exercise": "Hip-thrust", "target": "4×8"},
@@ -93,7 +94,7 @@ weekly_resistance = {
 # Note: The global 'conn' object is removed. Connections are now managed per function.
 
 # Helper function to parse target string for current set's percentage and reps
-def get_target_params_for_set(target_string, current_set_num):
+def get_target_params_for_set(target_string: str, current_set_num: int) -> Tuple[Optional[int], Optional[int]]:
     """
     Parses the target string (e.g., "1x4 @88% + 3x6-8 @78%") for a specific set number.
     Returns a tuple (percentage, reps_value).
@@ -147,7 +148,12 @@ def get_target_params_for_set(target_string, current_set_num):
     return None, None # No specific parameters found for this set number
 
 
-def _save_form_data(insert_query, data_payload, success_message, is_many=False):
+def _save_form_data(
+    insert_query: str,
+    data_payload: Union[Tuple[Any, ...], List[Tuple[Any, ...]]],
+    success_message: str,
+    is_many: bool = False
+) -> None:
     """Helper to save form data to the database."""
     if st.session_state.user_id is None:  # General check for logged-in user
         st.error("User not logged in. Cannot save data.")  # pragma: no cover
@@ -178,7 +184,7 @@ def _save_form_data(insert_query, data_payload, success_message, is_many=False):
 
 
 @st.cache_data  # Cache will be specific to user_id due to it being an argument
-def load_table(name, user_id):
+def load_table(name: str, user_id: Optional[int]) -> pd.DataFrame:
     conn = get_db_connection()
     # Ensure user_id is not None before querying
     if user_id is None:
@@ -194,7 +200,7 @@ def load_table(name, user_id):
 
 
 @st.cache_data  # Cache will be specific to user_id
-def fetch_last(exercise, set_num, user_id):
+def fetch_last(exercise: str, set_num: int, user_id: Optional[int]) -> Tuple[Optional[float], Optional[int], Optional[int]]:
     conn = get_db_connection()
     # Ensure user_id is not None
     if user_id is None:
@@ -213,7 +219,7 @@ def fetch_last(exercise, set_num, user_id):
 
 
 # --- Login/Signup UI ---
-def show_login_signup_forms():
+def show_login_signup_forms() -> None:
     st.sidebar.title("User Account")
     form_choice = st.sidebar.radio(
         "Choose Action", ["Login", "Sign Up"], key="auth_choice"
@@ -363,7 +369,8 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         entries = []
         pw, pr, pi = None, None, None # Previous set's weight, reps, RIR
         current_user_id = st.session_state.user_id
-        slider_step = 0.5 # Define slider step for weight
+        SLIDER_STEP = 0.5 # Define slider step for weight
+        MAX_WEIGHT_SLIDER = 150.0 # Max weight for slider
 
         for i in range(1, sets + 1): # For each set
             w0, r0, i0 = None, None, None # Default values for current set's sliders
@@ -384,7 +391,7 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 if one_rm_data and target_percentage is not None:
                     one_rm_value = one_rm_data["one_rep_max"]
                     calculated_w = (target_percentage / 100.0) * one_rm_value
-                    w0 = round(calculated_w / slider_step) * slider_step # Use calculated weight
+                    w0 = round(calculated_w / SLIDER_STEP) * SLIDER_STEP # Use calculated weight
 
                     if target_reps_prog is not None:
                         r0 = target_reps_prog # Use reps from program if available
@@ -393,10 +400,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 # If no 1RM or no target_percentage, w0, r0, i0 remain as previous set's values
 
             with st.expander(f"Set {i}"):
-                maxw = float(150) # Max weight for slider
                 # Use (w0 or 0) for weight, (r0 or 6) for reps, (i0 or 3) for RIR as slider defaults
                 aw = st.slider(
-                    "Weight (kg)", 0.0, maxw, float(w0 if w0 is not None else 0), step=slider_step, key=f"res_w_{i}"
+                    "Weight (kg)", 0.0, MAX_WEIGHT_SLIDER, float(w0 if w0 is not None else 0), step=SLIDER_STEP, key=f"res_w_{i}"
                 )
                 ar = st.slider("Reps", 1, 20, int(r0 if r0 is not None else 6), key=f"res_r_{i}")
                 rir = st.slider("RIR", 0, 5, int(i0 if i0 is not None else 3), key=f"res_i_{i}")
