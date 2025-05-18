@@ -784,22 +784,21 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         else: # pragma: no cover
                             st.write("No volume data to display for this exercise.")
 
-                # Special chart for Total Reps for Weighted Pull-ups (if it's a distinct requirement)
-                pullup_exercise_name = "Weighted Pull-up"
-                if pullup_exercise_name in unique_exercises:
-                    st.markdown("---") # Visual separator
-                    st.markdown(f"**{pullup_exercise_name} - Total Reps Over Time**")
-                    pullup_df = df_resistance[df_resistance["exercise"] == pullup_exercise_name].copy()
-                    pullup_df["date"] = pd.to_datetime(pullup_df["date"])
-                    chart_data_pullup_reps = (
-                        pullup_df.sort_values(by="date")
-                        .groupby(pd.Grouper(key="date", freq="D"))["actual_reps"]
-                        .sum()
-                        .fillna(0)
-                    )
-                    if not chart_data_pullup_reps.empty:
-                        st.line_chart(chart_data_pullup_reps, use_container_width=True, height=200)
-                    else: # pragma: no cover
-                        st.write(f"No reps data to display for {pullup_exercise_name}.")
+                        # If the current exercise is "Weighted Pull-up", add the total reps chart
+                        pullup_exercise_name = "Weighted Pull-up"
+                        if lift == pullup_exercise_name:
+                            st.markdown("---") # Visual separator within the expander
+                            st.markdown(f"**Total Reps Over Time**")
+                            # Data for pull-up reps (already filtered as exercise_df)
+                            chart_data_pullup_reps = (
+                                exercise_df.sort_values(by="date")
+                                .groupby(pd.Grouper(key="date", freq="D"))["actual_reps"]
+                                .sum()
+                                .fillna(0)
+                            )
+                            if not chart_data_pullup_reps.empty:
+                                st.line_chart(chart_data_pullup_reps, use_container_width=True, height=200)
+                            else: # pragma: no cover
+                                st.write(f"No reps data to display for {pullup_exercise_name}.")
             else:
                 st.write("No resistance data yet to display charts.")
