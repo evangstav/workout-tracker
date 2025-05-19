@@ -18,9 +18,10 @@ from database import (
     update_user_password,
     save_or_update_1rm,
     get_latest_1rm,
-    save_or_update_nutrition_log,  # New import
-    get_nutrition_log_by_date,  # New import
+    save_or_update_nutrition_log,
+    get_nutrition_log_by_date,
 )
+from ai_utils import extract_meals_from_text, OPENAI_API_KEY
 
 # --- Page Config & Styles ---
 st.set_page_config(
@@ -65,6 +66,8 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_id = None
     st.session_state.username = None
+if "analyzed_nutrition_content" not in st.session_state:
+    st.session_state.analyzed_nutrition_content = None
 
 # --- Program Definitions ---
 # (This remains global as it's program structure, not user data)
@@ -499,8 +502,14 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
         if current_user_id is None:  # pragma: no cover
             st.warning("Please log in to manage nutrition logs.")
         else:
+            def clear_analysis_callback():
+                st.session_state.analyzed_nutrition_content = None
+
             log_date_nutrition = st.date_input(
-                "Select date for meal log", date.today(), key="nutrition_log_date"
+                "Select date for meal log",
+                date.today(),
+                key="nutrition_log_date",
+                on_change=clear_analysis_callback
             )
             log_date_str_nutrition = log_date_nutrition.isoformat()
 
@@ -520,17 +529,38 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 key="nutrition_meal_description",
             )
 
+            if OPENAI_API_KEY:
+                if st.button("Analyze Current Meal Text with AI", key="analyze_nutrition_button"):
+                    text_to_analyze = st.session_state.nutrition_meal_description
+                    if text_to_analyze and text_to_analyze.strip():
+                        with st.spinner("Analyzing meals..."):
+                            st.session_state.analyzed_nutrition_content = extract_meals_from_text(text_to_analyze)
+                    else:
+                        st.session_state.analyzed_nutrition_content = {} # Reset or show empty if input is empty
+            else:
+                st.info("OpenAI API Key not configured. AI analysis features disabled.")
+
             if st.button("Save Meal Log", key="save_nutrition_log"):
                 if save_or_update_nutrition_log(
                     current_user_id, log_date_str_nutrition, meal_description_nutrition
                 ):
                     st.success("Meal log saved successfully.")
                     st.cache_data.clear()  # Clear cache to refresh logs and current view
-                    # Rerun to ensure the text area updates if the date was changed then saved.
-                    # This is particularly useful if the user clears text for a day and saves.
+                    if OPENAI_API_KEY and meal_description_nutrition and meal_description_nutrition.strip():
+                        with st.spinner("Analyzing saved meals..."):
+                            st.session_state.analyzed_nutrition_content = extract_meals_from_text(meal_description_nutrition)
+                    else:
+                        # Clear analysis if API key not present or description is empty
+                        st.session_state.analyzed_nutrition_content = None
                     st.rerun()
                 else:  # pragma: no cover
                     st.error("Failed to save meal log. Database error.")
+            
+            if st.session_state.get("analyzed_nutrition_content") is not None:
+                st.subheader("AI Extracted Meal Details")
+                st.json(st.session_state.analyzed_nutrition_content)
+                if not st.session_state.analyzed_nutrition_content: # Handles empty dict {}
+                    st.caption("Could not extract structured details, or no details found in the text.")
 
             st.divider()
             st.subheader("Meal Log History")
