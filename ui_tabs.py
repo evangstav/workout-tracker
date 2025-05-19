@@ -15,6 +15,10 @@ from database import (
     get_user_from_db,
     verify_password,
     update_user_password,
+    # Added delete functions
+    delete_resistance_set_from_db,
+    delete_nutrition_log_from_db,
+    delete_1rm_from_db,
 )
 from ai_utils import extract_meal_data, DaySummary
 
@@ -479,25 +483,37 @@ def render_nutrition_tab(OPENAI_API_KEY: Optional[str]):
 
         st.divider()
         st.subheader("Meal Log History")
-        df_nutrition_logs = load_table("nutrition_log", current_user_id)
+        df_nutrition_logs = load_table("nutrition_log", current_user_id) # Includes 'id'
         if not df_nutrition_logs.empty:
-            # Display relevant columns, format date for readability
-            display_nutrition_df = df_nutrition_logs[
-                ["date", "meal_description", "updated_at"]
-            ].copy()
-            display_nutrition_df["date"] = pd.to_datetime(
-                display_nutrition_df["date"]
-            ).dt.strftime("%Y-%m-%d")
-            display_nutrition_df["updated_at"] = pd.to_datetime(
-                display_nutrition_df["updated_at"]
-            ).dt.strftime("%Y-%m-%d %H:%M")
-            display_nutrition_df = display_nutrition_df.rename(
-                columns={"updated_at": "Last Updated"}
-            )
-            st.dataframe(
-                display_nutrition_df.sort_values(by="date", ascending=False),
-                use_container_width=True,
-            )
+            # Sort by date before displaying
+            df_nutrition_logs_sorted = df_nutrition_logs.sort_values(by="date", ascending=False)
+
+            # Prepare columns for display
+            cols_to_display = ["date", "meal_description", "total_calories", "total_protein_g", "updated_at", "Action"]
+            header_cols = st.columns(len(cols_to_display))
+            for col, header in zip(header_cols, cols_to_display):
+                col.markdown(f"**{header}**")
+
+            for index, row in df_nutrition_logs_sorted.iterrows():
+                col1, col2, col3, col4, col5, col6 = st.columns(len(cols_to_display))
+                col1.text(pd.to_datetime(row["date"]).strftime("%Y-%m-%d"))
+                col2.text(row["meal_description"])
+                col3.text(str(row["total_calories"]) if pd.notna(row["total_calories"]) else "N/A")
+                col4.text(str(row["total_protein_g"]) if pd.notna(row["total_protein_g"]) else "N/A")
+                col5.text(pd.to_datetime(row["updated_at"]).strftime("%Y-%m-%d %H:%M"))
+
+                button_key_nutrition = f"delete_nutrition_{row['id']}" if 'id' in row and pd.notna(row['id']) else f"delete_nutrition_invalid_id_{index}"
+                if col6.button("Delete", key=button_key_nutrition):
+                    if 'id' in row and pd.notna(row['id']):
+                        if delete_nutrition_log_from_db(int(row['id']), current_user_id):
+                            st.success(f"Nutrition log for {pd.to_datetime(row['date']).strftime('%Y-%m-%d')} deleted.")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else: # pragma: no cover
+                            st.error("Failed to delete nutrition log.")
+                    else: # pragma: no cover
+                        st.error("Cannot delete: Log entry ID is missing or invalid.")
+                st.markdown("---") 
         else:
             st.write("No meal logs recorded yet.")
 
@@ -759,23 +775,85 @@ def render_profile_tab():
                 st.error("Please select an exercise and enter a valid 1RM weight.")
 
     st.divider()
-    st.subheader("Latest Logged 1RMs")
-    latest_1rms_data = []
-    for ex in one_rm_exercises:
-        latest_rm = get_latest_1rm(current_user_id, ex)
-        if latest_rm:
-            latest_1rms_data.append(
-                {
-                    "Exercise": ex,
-                    "1RM (kg)": latest_rm["one_rep_max"],
-                    "Date": pd.to_datetime(latest_rm["date"]).strftime("%Y-%m-%d"),
-                }
-            )
+    st.subheader("Latest Logged 1RMs (Summary per Exercise)")
+    latest_1rms_data_display = []
+    for ex_name in one_rm_exercises:
+        latest_rm_record = get_latest_1rm(current_user_id, ex_name) # Assumes this returns id, one_rep_max, date
+        if latest_rm_record and 'id' in latest_rm_record: # Check if 'id' is present
+            latest_1rms_data_display.append({
+                "id": latest_rm_record["id"], 
+                "Exercise": ex_name,
+                "1RM (kg)": latest_rm_record["one_rep_max"],
+                "Date": pd.to_datetime(latest_rm_record["date"]).strftime("%Y-%m-%d"),
+            })
+        elif latest_rm_record: # pragma: no cover # Fallback if id is somehow missing but record exists
+            st.warning(f"1RM record for {ex_name} is missing an ID, delete unavailable for this summary entry.")
+            latest_1rms_data_display.append({
+                "id": None, # Explicitly set id to None
+                "Exercise": ex_name,
+                "1RM (kg)": latest_rm_record["one_rep_max"],
+                "Date": pd.to_datetime(latest_rm_record["date"]).strftime("%Y-%m-%d"),
+            })
 
-    if latest_1rms_data:
-        st.dataframe(pd.DataFrame(latest_1rms_data), use_container_width=True)
+
+    if latest_1rms_data_display:
+        headers = ["Exercise", "1RM (kg)", "Date", "Action"]
+        header_cols = st.columns(len(headers))
+        for col, header_name in zip(header_cols, headers):
+            col.markdown(f"**{header_name}**")
+
+        for record in latest_1rms_data_display:
+            col1, col2, col3, col4 = st.columns(len(headers))
+            col1.text(record["Exercise"])
+            col2.text(f"{record['1RM (kg)']:.1f}" if pd.notna(record['1RM (kg)']) else "N/A")
+            col3.text(record["Date"])
+            
+            button_key_latest_1rm = f"delete_latest_1rm_{record['id']}" if record['id'] is not None else f"delete_latest_1rm_invalid_id_{record['Exercise']}"
+            if record['id'] is not None: # Only show delete button if ID is valid
+                if col4.button("Delete", key=button_key_latest_1rm):
+                    if delete_1rm_from_db(int(record['id']), current_user_id):
+                        st.success(f"1RM record for {record['Exercise']} on {record['Date']} deleted.")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else: # pragma: no cover
+                        st.error("Failed to delete 1RM record from summary.")
+            else:
+                col4.text("N/A") # No action if no ID
+            st.markdown("---")
     else:
-        st.write("No 1RMs logged yet.")
+        st.write("No 1RMs logged yet for the summary display.")
+
+    st.divider()
+    st.subheader("All Logged 1RMs")
+    all_1rms_df = load_table("user_1rm", current_user_id) # Includes 'id'
+    if not all_1rms_df.empty:
+        all_1rms_df_sorted = all_1rms_df.sort_values(by=["exercise", "date"], ascending=[True, False])
+        
+        all_headers = ["Exercise", "1RM (kg)", "Date", "Action"]
+        all_header_cols = st.columns(len(all_headers))
+        for col, header_name in zip(all_header_cols, all_headers):
+            col.markdown(f"**{header_name}**")
+
+        for index, row in all_1rms_df_sorted.iterrows():
+            col1, col2, col3, col4 = st.columns(len(all_headers))
+            col1.text(row["exercise"])
+            col2.text(f"{row['one_rep_max']:.1f}" if pd.notna(row['one_rep_max']) else "N/A")
+            col3.text(pd.to_datetime(row["date"]).strftime("%Y-%m-%d"))
+            
+            button_key_all_1rm = f"delete_all_1rm_{row['id']}" if 'id' in row and pd.notna(row['id']) else f"delete_all_1rm_invalid_id_{index}"
+            if 'id' in row and pd.notna(row['id']):
+                if col4.button("Delete", key=button_key_all_1rm):
+                    if delete_1rm_from_db(int(row['id']), current_user_id):
+                        st.success(f"1RM record for {row['exercise']} on {pd.to_datetime(row['date']).strftime('%Y-%m-%d')} deleted.")
+                        st.cache_data.clear()
+                        st.rerun()
+                    else: # pragma: no cover
+                        st.error("Failed to delete 1RM record from all logs.")
+            else: # pragma: no cover
+                col4.text("N/A") # No action if no ID
+            st.markdown("---")
+    else:
+        st.write("No 1RMs recorded in total yet.")
 
 def render_logs_tab():
     st.header("📊 Logs")
@@ -784,16 +862,86 @@ def render_logs_tab():
         st.warning("Please log in to see your logs.")
     else:
         st.subheader("Resistance")
-        st.dataframe(load_table("resistance", current_user_id))
+        df_resistance_logs = load_table("resistance", current_user_id) # Includes 'id' by default from load_table
+
+        # --- Start of Diagnostic Info ---
+        st.write("--- Resistance Log Diagnostics ---")
+        if current_user_id is None: # pragma: no cover
+            st.write("Current User ID is None. Cannot load logs.")
+        else:
+            st.write(f"Current User ID: {current_user_id}")
+        
+        if df_resistance_logs is None: # pragma: no cover
+            st.write("df_resistance_logs is None (load_table might have failed unexpectedly).")
+        else:
+            st.write(f"Shape of df_resistance_logs: {df_resistance_logs.shape}")
+            st.write(f"Columns in df_resistance_logs: {df_resistance_logs.columns.tolist()}")
+            if 'id' not in df_resistance_logs.columns and not df_resistance_logs.empty: # pragma: no cover
+                st.error("Critical: 'id' column is missing from df_resistance_logs!")
+        # --- End of Diagnostic Info ---
+
+        if not df_resistance_logs.empty:
+            st.write(f"Found {len(df_resistance_logs)} resistance log(s) to display.") # Diagnostic
+            # Define columns to display for resistance logs, adding "Action"
+            resistance_cols_to_display = [
+                "date", "week", "day", "exercise", "set_number", 
+                "target", "actual_weight", "actual_reps", "rir", "Action"
+            ]
+            # Display headers
+            header_cols_resistance = st.columns(len(resistance_cols_to_display))
+            for col, header in zip(header_cols_resistance, resistance_cols_to_display):
+                col.markdown(f"**{header}**")
+
+            # Iterate and display each resistance log entry with a delete button
+            # Sort by date descending before display
+            df_resistance_logs_sorted = df_resistance_logs.sort_values(by="date", ascending=False)
+            for index, row in df_resistance_logs_sorted.iterrows():
+                st.write(f"Processing resistance row with ID: {row.get('id', 'ID_NOT_FOUND')}") # Diagnostic for ID
+                data_cols = st.columns(len(resistance_cols_to_display))
+                
+                data_cols[0].text(pd.to_datetime(row["date"]).strftime("%Y-%m-%d"))
+                data_cols[1].text(str(row["week"]) if pd.notna(row["week"]) else "N/A")
+                data_cols[2].text(str(row["day"]) if pd.notna(row["day"]) else "N/A")
+                data_cols[3].text(str(row["exercise"]) if pd.notna(row["exercise"]) else "N/A")
+                data_cols[4].text(str(row["set_number"]) if pd.notna(row["set_number"]) else "N/A")
+                data_cols[5].text(str(row["target"]) if pd.notna(row["target"]) else "N/A")
+                data_cols[6].text(f"{row['actual_weight']:.1f}" if pd.notna(row['actual_weight']) else "N/A")
+                data_cols[7].text(str(int(row["actual_reps"])) if pd.notna(row["actual_reps"]) else "N/A")
+                data_cols[8].text(str(int(row["rir"])) if pd.notna(row["rir"]) else "N/A")
+                
+                button_key = f"delete_resistance_{row['id']}" if 'id' in row and pd.notna(row['id']) else f"delete_resistance_invalid_id_{index}"
+
+                if data_cols[9].button("Delete", key=button_key):
+                    if 'id' in row and pd.notna(row['id']):
+                        if delete_resistance_set_from_db(int(row['id']), current_user_id):
+                            st.success(f"Resistance set {row['id']} deleted.")
+                            st.cache_data.clear()
+                            st.rerun()
+                        else: # pragma: no cover
+                            st.error("Failed to delete resistance set.")
+                    else: # pragma: no cover
+                        st.error("Cannot delete: Log entry ID is missing or invalid.")
+                st.markdown("---") 
+        else:
+            st.write("No resistance logs recorded yet for this user.")
+
         st.subheader("Mobility")
-        st.dataframe(load_table("mobility", current_user_id))
+        st.dataframe(load_table("mobility", current_user_id)) # No delete for these yet
         st.subheader("Cardio")
-        st.dataframe(load_table("cardio", current_user_id))
+        st.dataframe(load_table("cardio", current_user_id)) # No delete for these yet
 
         st.subheader("Progress Charts (Resistance)")
-        df_resistance = load_table("resistance", current_user_id)
+        # df_resistance is already loaded as df_resistance_logs
+        if not df_resistance_logs.empty:
+            # Use df_resistance_logs for charts
+            unique_exercises = df_resistance_logs["exercise"].unique()
 
-        if not df_resistance.empty:
+            for lift in unique_exercises:
+                with st.expander(f"Charts for {lift}"):
+                    # Filter data for the current exercise
+                    exercise_df = df_resistance_logs[
+                        df_resistance_logs["exercise"] == lift
+                    ].copy()
             unique_exercises = df_resistance["exercise"].unique()
 
             for lift in unique_exercises:
