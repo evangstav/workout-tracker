@@ -9,6 +9,7 @@ from pydantic_ai.models import (
     GeminiModel,
     MistralModel,
     FallbackModel,
+    LLMModel,  # Added import
 )
 
 
@@ -28,7 +29,7 @@ class ParsedMeals(BaseModel):
 
 
 # ---------- 2.  Pick provider(s) ------------------
-def _pick_model() -> "Model":
+def _pick_model() -> LLMModel:
     """Return a ready-to-use PydanticAI model according to env vars."""
     provider = os.getenv("AI_PROVIDER", "openai")
     model_name = os.getenv("AI_MODEL")  # optional override
