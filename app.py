@@ -5,6 +5,7 @@
 import streamlit as st
 from datetime import date
 import os # For OPENAI_API_KEY
+from typing import Dict, List # Added import
 
 # Project specific imports
 from database import (
