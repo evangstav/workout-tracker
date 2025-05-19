@@ -942,13 +942,13 @@ def render_logs_tab():
                     exercise_df = df_resistance_logs[
                         df_resistance_logs["exercise"] == lift
                     ].copy()
-            unique_exercises = df_resistance["exercise"].unique()
+            unique_exercises = df_resistance_logs["exercise"].unique()
 
             for lift in unique_exercises:
                 with st.expander(f"Charts for {lift}"):
                     # Filter data for the current exercise
-                    exercise_df = df_resistance[
-                        df_resistance["exercise"] == lift
+                    exercise_df = df_resistance_logs[
+                        df_resistance_logs["exercise"] == lift
                     ].copy()
                     exercise_df["date"] = pd.to_datetime(exercise_df["date"])
 
