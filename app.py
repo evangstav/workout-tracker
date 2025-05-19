@@ -21,7 +21,7 @@ from database import (
     save_or_update_nutrition_log,
     get_nutrition_log_by_date,
 )
-from ai_utils import extract_meals_from_text, OPENAI_API_KEY
+from ai_utils import extract_meal_data, OPENAI_API_KEY
 
 # --- Page Config & Styles ---
 st.set_page_config(
@@ -532,11 +532,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             if OPENAI_API_KEY:
                 if st.button("Analyze Current Meal Text with AI", key="analyze_nutrition_button"):
                     text_to_analyze = st.session_state.nutrition_meal_description
-                    if text_to_analyze and text_to_analyze.strip():
-                        with st.spinner("Analyzing meals..."):
-                            st.session_state.analyzed_nutrition_content = extract_meals_from_text(text_to_analyze)
-                    else:
-                        st.session_state.analyzed_nutrition_content = {} # Reset or show empty if input is empty
+                    # extract_meal_data now handles empty/whitespace-only strings
+                    with st.spinner("Analyzing meals..."):
+                        st.session_state.analyzed_nutrition_content = extract_meal_data(text_to_analyze)
             else:
                 st.info("OpenAI API Key not configured. AI analysis features disabled.")
 
@@ -546,22 +544,30 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 ):
                     st.success("Meal log saved successfully.")
                     st.cache_data.clear()  # Clear cache to refresh logs and current view
-                    if OPENAI_API_KEY and meal_description_nutrition and meal_description_nutrition.strip():
+                    if OPENAI_API_KEY:
+                        # Always call extract_meal_data, it handles empty strings
                         with st.spinner("Analyzing saved meals..."):
-                            st.session_state.analyzed_nutrition_content = extract_meals_from_text(meal_description_nutrition)
+                            st.session_state.analyzed_nutrition_content = extract_meal_data(meal_description_nutrition)
                     else:
-                        # Clear analysis if API key not present or description is empty
+                        # Clear analysis if API key not present
                         st.session_state.analyzed_nutrition_content = None
                     st.rerun()
                 else:  # pragma: no cover
                     st.error("Failed to save meal log. Database error.")
-            
-            if st.session_state.get("analyzed_nutrition_content") is not None:
-                st.subheader("AI Extracted Meal Details")
-                st.json(st.session_state.analyzed_nutrition_content)
-                if not st.session_state.analyzed_nutrition_content: # Handles empty dict {}
-                    st.caption("Could not extract structured details, or no details found in the text.")
 
+            analyzed_content = st.session_state.get("analyzed_nutrition_content")
+            if analyzed_content is not None:
+                st.subheader("AI Extracted Meal Details")
+                if "total_calories" in analyzed_content and "total_protein_g" in analyzed_content:
+                    st.metric(label="Total Estimated Calories", value=f"{analyzed_content['total_calories']} kcal")
+                    st.metric(label="Total Estimated Protein", value=f"{analyzed_content['total_protein_g']} g")
+                
+                # Display the full JSON for transparency or if totals are missing
+                st.json(analyzed_content)
+
+                if not analyzed_content.get("items"): # Check if items list is empty or missing
+                    st.caption("No specific food items were extracted, or no details found in the text.")
+            
             st.divider()
             st.subheader("Meal Log History")
             df_nutrition_logs = load_table("nutrition_log", current_user_id)

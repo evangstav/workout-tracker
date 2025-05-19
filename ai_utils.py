@@ -17,10 +17,14 @@ class FoodItem(BaseModel):
     meal: Literal["Breakfast", "Lunch", "Dinner", "Snack"]
     food: str
     quantity_g: conint(ge=1)
+    calories: conint(ge=0)
+    protein_g: conint(ge=0)
 
 
 class ParsedMeals(BaseModel):
     items: List[FoodItem]
+    total_calories: conint(ge=0)
+    total_protein_g: conint(ge=0)
 
 
 # ---------- 2.  Pick provider(s) ------------------
@@ -55,14 +59,21 @@ meal_agent = Agent(
     output_model=ParsedMeals,
     system_prompt=(
         "You are a nutrition assistant. "
-        "Return a JSON list called 'items' with the meal, food name "
-        "and quantity in grams. If quantity missing assume a typical portion."
+        "Return a JSON object with a list called 'items' and two top-level keys: "
+        "'total_calories' and 'total_protein_g'. "
+        "Each item in the 'items' list should detail the meal type (Breakfast, Lunch, Dinner, Snack), "
+        "food name, quantity in grams, calories, and protein in grams. "
+        "If quantity, calories, or protein are missing for an item, assume a typical portion and estimate them. "
+        "Calculate 'total_calories' and 'total_protein_g' by summing the calories and protein_g from all items in the list."
     ),
 )
 
 
 # ---------- 4.  Utility that the Streamlit app calls -------------
-def extract_food_items(free_text: str) -> list[dict]:
-    """Return list of dicts compatible with nutrition_items table."""
+def extract_meal_data(free_text: str) -> dict:
+    """Return a dict representing the ParsedMeals object, including totals and items."""
+    if not free_text or not free_text.strip():
+        # Return a structure that indicates no data, matching ParsedMeals
+        return ParsedMeals(items=[], total_calories=0, total_protein_g=0).model_dump()
     parsed: ParsedMeals = meal_agent.run_sync(free_text)
-    return [itm.model_dump() for itm in parsed.items]  # Pydantic v2 syntax
+    return parsed.model_dump()  # Pydantic v2 syntax

@@ -419,3 +419,70 @@ def test_save_form_data_empty_payload_for_many(mock_st_environment):
     mock_st.warning.assert_called_with("No data to save.")
     mock_st.success.assert_not_called()
     mock_st.cache_data.clear.assert_not_called()
+
+
+# --- AI Utils Function Tests ---
+# We need to import the ai_utils module to test its functions
+from ai_utils import extract_meal_data, ParsedMeals, FoodItem, meal_agent
+
+@patch('ai_utils.meal_agent.run_sync')
+def test_extract_meal_data_success(mock_run_sync):
+    # Mock the response from the AI agent
+    mock_response_data = {
+        "items": [
+            {"meal": "Breakfast", "food": "Oats", "quantity_g": 50, "calories": 150, "protein_g": 5},
+            {"meal": "Lunch", "food": "Chicken Salad", "quantity_g": 200, "calories": 300, "protein_g": 30}
+        ],
+        "total_calories": 450,
+        "total_protein_g": 35
+    }
+    mock_run_sync.return_value = ParsedMeals(**mock_response_data)
+
+    free_text = "Breakfast: Oats 50g. Lunch: Chicken Salad 200g."
+    result = extract_meal_data(free_text)
+
+    assert result == mock_response_data
+    mock_run_sync.assert_called_once_with(free_text)
+
+
+@patch('ai_utils.meal_agent.run_sync')
+def test_extract_meal_data_empty_items(mock_run_sync):
+    # Mock the AI agent returning no items but valid totals (as per Pydantic model)
+    mock_response_data = {
+        "items": [],
+        "total_calories": 0,
+        "total_protein_g": 0
+    }
+    mock_run_sync.return_value = ParsedMeals(**mock_response_data)
+
+    free_text = "Nothing eaten today."
+    result = extract_meal_data(free_text)
+
+    assert result == mock_response_data
+    mock_run_sync.assert_called_once_with(free_text)
+
+
+def test_extract_meal_data_empty_input_string():
+    # Test with empty or whitespace-only string, should not call agent
+    # and should return the default empty structure.
+    expected_empty_result = {
+        "items": [],
+        "total_calories": 0,
+        "total_protein_g": 0
+    }
+    assert extract_meal_data("") == expected_empty_result
+    assert extract_meal_data("   ") == expected_empty_result
+    # meal_agent.run_sync should not have been called, so no need to mock it here.
+
+
+@patch('ai_utils.meal_agent.run_sync')
+def test_extract_meal_data_agent_failure_or_malformed_response(mock_run_sync):
+    # If the agent fails or returns something that doesn't match ParsedMeals,
+    # Pydantic validation within meal_agent.run_sync or during ParsedMeals instantiation
+    # should raise an error. The function extract_meal_data itself doesn't catch these.
+    # This test verifies that if the agent call fails (e.g., raises an exception),
+    # the exception propagates.
+    mock_run_sync.side_effect = Exception("AI agent failed")
+
+    with pytest.raises(Exception, match="AI agent failed"):
+        extract_meal_data("Some complex meal text that might break the agent")
