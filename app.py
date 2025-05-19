@@ -18,8 +18,8 @@ from database import (
     update_user_password,
     save_or_update_1rm,
     get_latest_1rm,
-    save_or_update_nutrition_log, # New import
-    get_nutrition_log_by_date,   # New import
+    save_or_update_nutrition_log,  # New import
+    get_nutrition_log_by_date,  # New import
 )
 
 # --- Page Config & Styles ---
@@ -294,7 +294,9 @@ else:
         st.rerun()
 
     # --- Main Application with Tabs (only if logged in) ---
-    tabs = st.tabs(["Guide", "Resistance", "Mobility", "Cardio", "Nutrition", "Profile", "Logs"])
+    tabs = st.tabs(
+        ["Guide", "Resistance", "Mobility", "Cardio", "Nutrition", "Profile", "Logs"]
+    )
 
     # Guide Tab (No user-specific data, can remain as is)
     with tabs[0]:
@@ -494,45 +496,65 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
     with tabs[4]:
         st.header("🥗 Nutrition Log")
         current_user_id = st.session_state.user_id
-        if current_user_id is None: # pragma: no cover
+        if current_user_id is None:  # pragma: no cover
             st.warning("Please log in to manage nutrition logs.")
         else:
-            log_date_nutrition = st.date_input("Select date for meal log", date.today(), key="nutrition_log_date")
+            log_date_nutrition = st.date_input(
+                "Select date for meal log", date.today(), key="nutrition_log_date"
+            )
             log_date_str_nutrition = log_date_nutrition.isoformat()
 
-            existing_log_nutrition = get_nutrition_log_by_date(current_user_id, log_date_str_nutrition)
-            default_description_nutrition = existing_log_nutrition["meal_description"] if existing_log_nutrition else ""
+            existing_log_nutrition = get_nutrition_log_by_date(
+                current_user_id, log_date_str_nutrition
+            )
+            default_description_nutrition = (
+                existing_log_nutrition["meal_description"]
+                if existing_log_nutrition
+                else ""
+            )
 
             meal_description_nutrition = st.text_area(
                 "Log your meals for the day (e.g., Breakfast: Oats with berries; Lunch: Chicken salad; Dinner: Salmon with roasted vegetables):",
                 value=default_description_nutrition,
                 height=250,
-                key="nutrition_meal_description"
+                key="nutrition_meal_description",
             )
 
             if st.button("Save Meal Log", key="save_nutrition_log"):
-                if save_or_update_nutrition_log(current_user_id, log_date_str_nutrition, meal_description_nutrition):
+                if save_or_update_nutrition_log(
+                    current_user_id, log_date_str_nutrition, meal_description_nutrition
+                ):
                     st.success("Meal log saved successfully.")
                     st.cache_data.clear()  # Clear cache to refresh logs and current view
                     # Rerun to ensure the text area updates if the date was changed then saved.
                     # This is particularly useful if the user clears text for a day and saves.
                     st.rerun()
-                else: # pragma: no cover
+                else:  # pragma: no cover
                     st.error("Failed to save meal log. Database error.")
-            
+
             st.divider()
             st.subheader("Meal Log History")
             df_nutrition_logs = load_table("nutrition_log", current_user_id)
             if not df_nutrition_logs.empty:
                 # Display relevant columns, format date for readability
-                display_nutrition_df = df_nutrition_logs[["date", "meal_description", "updated_at"]].copy()
-                display_nutrition_df["date"] = pd.to_datetime(display_nutrition_df["date"]).dt.strftime("%Y-%m-%d")
-                display_nutrition_df["updated_at"] = pd.to_datetime(display_nutrition_df["updated_at"]).dt.strftime("%Y-%m-%d %H:%M")
-                display_nutrition_df = display_nutrition_df.rename(columns={"updated_at": "Last Updated"})
-                st.dataframe(display_nutrition_df.sort_values(by="date", ascending=False), use_container_width=True)
+                display_nutrition_df = df_nutrition_logs[
+                    ["date", "meal_description", "updated_at"]
+                ].copy()
+                display_nutrition_df["date"] = pd.to_datetime(
+                    display_nutrition_df["date"]
+                ).dt.strftime("%Y-%m-%d")
+                display_nutrition_df["updated_at"] = pd.to_datetime(
+                    display_nutrition_df["updated_at"]
+                ).dt.strftime("%Y-%m-%d %H:%M")
+                display_nutrition_df = display_nutrition_df.rename(
+                    columns={"updated_at": "Last Updated"}
+                )
+                st.dataframe(
+                    display_nutrition_df.sort_values(by="date", ascending=False),
+                    use_container_width=True,
+                )
             else:
                 st.write("No meal logs recorded yet.")
-
 
     # Profile Tab
     with tabs[5]:  # Index updated from 4 to 5
