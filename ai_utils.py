@@ -1,72 +1,62 @@
 # ai_utils.py
 import os
+import json
 from typing import Literal, List
 from pydantic import BaseModel, conint
 from pydantic_ai import Agent
-from pydantic_ai.models import (
-    OpenAIModel,
-    AnthropicModel,
-    GeminiModel,
-    MistralModel,
-    FallbackModel,
-    LLMModel,  # Added import
-)
+from pydantic import BaseModel, conint, ConfigDict
 
 
 # ---------- 1.  Structured output -----------------
 class FoodItem(BaseModel):
-    meal: Literal["Breakfast", "Lunch", "Dinner", "Snack"]
-    food: str
+    meal_type: Literal["Breakfast", "Lunch", "Dinner", "Snack"]
+    food_name: str
     quantity_g: conint(ge=1)
     calories: conint(ge=0)
     protein_g: conint(ge=0)
+    model_config = ConfigDict(extra="forbid")  # no stray keys per-item
 
 
-class ParsedMeals(BaseModel):
-    items: List[FoodItem]
+class DaySummary(BaseModel):
     total_calories: conint(ge=0)
     total_protein_g: conint(ge=0)
+    items: List[FoodItem]
+    model_config = ConfigDict(extra="forbid")
 
 
-# ---------- 2.  Pick provider(s) ------------------
-def _pick_model() -> LLMModel:
-    """Return a ready-to-use PydanticAI model according to env vars."""
-    provider = os.getenv("AI_PROVIDER", "openai")
-    model_name = os.getenv("AI_MODEL")  # optional override
-
-    if provider == "openai":
-        return OpenAIModel(model=model_name or "gpt-4o-mini")
-    if provider == "anthropic":
-        return AnthropicModel(model=model_name or "claude-3-haiku-20240307")
-    if provider == "mistral":
-        return MistralModel(model=model_name or "mistral-small-latest")
-    if provider == "gemini":
-        return GeminiModel(model=model_name or "gemini-1.5-flash")
-    raise ValueError(f"Unknown AI_PROVIDER={provider!r}")
-
-
-PRIMARY_MODEL = _pick_model()
-
-# Optional: automatic fallback to a local Ollama model
-if os.getenv("ENABLE_FALLBACK") == "1":
-    from pydantic_ai.models.ollama import OllamaModel
-
-    fallback = OllamaModel(model="mixtral:8x7b")
-    PRIMARY_MODEL = FallbackModel([PRIMARY_MODEL, fallback])
-
+model = os.getenv("PYDANTIC_AI_MODEL", "openai:gpt-4o-mini")
+print(f"Using model: {model}")
 # ---------- 3.  Build the agent -------------------
+SYSTEM_MSG = """
+You are a nutrition assistant.
+
+Return ONE valid JSON object that matches exactly this schema:
+
+{
+  "total_calories": integer,          // day's kcal sum
+  "total_protein_g": integer,         // day's protein g sum
+  "items": [
+    {
+      "meal_type":   "Breakfast" | "Lunch" | "Dinner" | "Snack",
+      "food_name":   string,
+      "quantity_g":  integer,         // grams
+      "calories":    integer,         // kcal
+      "protein_g":   integer          // g
+    }
+  ]
+}
+
+Rules:
+1. **No markdown, no code fences, no commentary** – JSON only.
+2. Use the key names exactly as shown.
+3. If quantity is missing, infer a realistic portion size before you calculate kcal/protein.
+"""
 meal_agent = Agent(
-    model=PRIMARY_MODEL,
-    output_model=ParsedMeals,
-    system_prompt=(
-        "You are a nutrition assistant. "
-        "Return a JSON object with a list called 'items' and two top-level keys: "
-        "'total_calories' and 'total_protein_g'. "
-        "Each item in the 'items' list should detail the meal type (Breakfast, Lunch, Dinner, Snack), "
-        "food name, quantity in grams, calories, and protein in grams. "
-        "If quantity, calories, or protein are missing for an item, assume a typical portion and estimate them. "
-        "Calculate 'total_calories' and 'total_protein_g' by summing the calories and protein_g from all items in the list."
-    ),
+    model=model,
+    output_type=DaySummary,  # latest API style
+    system_prompt=SYSTEM_MSG,
+    # JSON-only guard (ignored by vendors that don't support it)
+    model_kwargs={"response_format": {"type": "json_object"}},
 )
 
 
@@ -75,6 +65,6 @@ def extract_meal_data(free_text: str) -> dict:
     """Return a dict representing the ParsedMeals object, including totals and items."""
     if not free_text or not free_text.strip():
         # Return a structure that indicates no data, matching ParsedMeals
-        return ParsedMeals(items=[], total_calories=0, total_protein_g=0).model_dump()
-    parsed: ParsedMeals = meal_agent.run_sync(free_text)
-    return parsed.model_dump()  # Pydantic v2 syntax
+        return DaySummary(items=[], total_calories=0, total_protein_g=0)
+    parsed: DaySummary = meal_agent.run_sync(free_text)
+    return parsed.output  # Pydantic v2 syntax

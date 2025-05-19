@@ -10,7 +10,7 @@ import os  # For managing temporary test database file
 # For now, let's assume app.py can be imported, and we'll mock 'st' within tests.
 
 import app  # This will run app.init_db() with the production DB_NAME once.
-import database # Import the database module
+import database  # Import the database module
 
 
 TEST_DB_FILE = "test_workout_tracker.db"
@@ -19,8 +19,10 @@ TEST_DB_FILE = "test_workout_tracker.db"
 @pytest.fixture
 def test_db(monkeypatch):
     """Fixture to set up and tear down a temporary database for tests."""
-    original_db_name = database.DB_NAME # Get original from database module
-    monkeypatch.setattr(database, "DB_NAME", TEST_DB_FILE) # Patch DB_NAME in database module
+    original_db_name = database.DB_NAME  # Get original from database module
+    monkeypatch.setattr(
+        database, "DB_NAME", TEST_DB_FILE
+    )  # Patch DB_NAME in database module
 
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
@@ -32,7 +34,9 @@ def test_db(monkeypatch):
     # Teardown: remove test DB and restore original DB name
     if os.path.exists(TEST_DB_FILE):
         os.remove(TEST_DB_FILE)
-    monkeypatch.setattr(database, "DB_NAME", original_db_name) # Restore DB_NAME in database module
+    monkeypatch.setattr(
+        database, "DB_NAME", original_db_name
+    )  # Restore DB_NAME in database module
 
 
 @pytest.fixture
@@ -110,14 +114,14 @@ def mock_st_environment(monkeypatch, active_user):
 
 def test_hash_password():
     password = "testpassword"
-    hashed = app.hash_password(password)
+    hashed = database.hash_password(password)
     assert isinstance(hashed, str)
     assert password != hashed
 
 
 def test_verify_password():
     password = "testpassword"
-    hashed = app.hash_password(password)
+    hashed = database.hash_password(password)
     assert app.verify_password(hashed, password) is True
     assert app.verify_password(hashed, "wrongpassword") is False
 
@@ -144,7 +148,7 @@ def test_get_user_from_db(test_db):  # Uses test_db fixture
     assert non_existent_user is None
 
 
-def test_update_user_password(test_db): # Uses test_db fixture
+def test_update_user_password(test_db):  # Uses test_db fixture
     # Create a user first
     username = "test_update_pass_user"
     original_password = "oldPassword123"
@@ -153,26 +157,37 @@ def test_update_user_password(test_db): # Uses test_db fixture
 
     # Update the password
     new_password = "newPassword456"
-    update_success = database.update_user_password(user_id, new_password) # Call directly from database module
+    update_success = database.update_user_password(
+        user_id, new_password
+    )  # Call directly from database module
     assert update_success is True
 
     # Verify the new password works and old one doesn't
     user_after_update = app.get_user_from_db(username)
     assert user_after_update is not None
     assert app.verify_password(user_after_update["password_hash"], new_password) is True
-    assert app.verify_password(user_after_update["password_hash"], original_password) is False
+    assert (
+        app.verify_password(user_after_update["password_hash"], original_password)
+        is False
+    )
 
     # Test updating password for a non-existent user_id (should not error, but return False or handle gracefully)
     # The current database.update_user_password doesn't explicitly return False for non-existent user,
     # but the update won't affect any rows. A more robust check might involve checking c.rowcount.
     # For now, we ensure it doesn't crash.
     non_existent_user_id = 99999
-    update_fail = database.update_user_password(non_existent_user_id, "somePassword") # Call directly from database module
-    assert update_fail is True # The function returns True if execute/commit don't raise an error.
-                               # No rows affected is not an error. This is acceptable.
+    update_fail = database.update_user_password(
+        non_existent_user_id, "somePassword"
+    )  # Call directly from database module
+    assert (
+        update_fail is True
+    )  # The function returns True if execute/commit don't raise an error.
+    # No rows affected is not an error. This is acceptable.
 
 
-def test_save_or_update_1rm(active_user): # Uses active_user fixture (which implies test_db)
+def test_save_or_update_1rm(
+    active_user,
+):  # Uses active_user fixture (which implies test_db)
     user_id = active_user
     exercise = "Back-squat"
     today_iso = date.today().isoformat()
@@ -183,7 +198,10 @@ def test_save_or_update_1rm(active_user): # Uses active_user fixture (which impl
     assert success_save is True
     conn = database.get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT one_rep_max, date FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    c.execute(
+        "SELECT one_rep_max, date FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?",
+        (user_id, exercise, today_iso),
+    )
     result = c.fetchone()
     assert result is not None
     assert result["one_rep_max"] == 100.0
@@ -194,27 +212,38 @@ def test_save_or_update_1rm(active_user): # Uses active_user fixture (which impl
     assert success_update is True
     conn = database.get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT one_rep_max FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    c.execute(
+        "SELECT one_rep_max FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?",
+        (user_id, exercise, today_iso),
+    )
     result = c.fetchone()
     assert result["one_rep_max"] == 105.0
     # Ensure only one record for that date
-    c.execute("SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?", (user_id, exercise, today_iso))
+    c.execute(
+        "SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ? AND date = ?",
+        (user_id, exercise, today_iso),
+    )
     count = c.fetchone()[0]
     assert count == 1
     conn.close()
 
     # 3. Save a new 1RM for a different date (should be a new record)
-    success_save_new_date = database.save_or_update_1rm(user_id, exercise, 110.0, tomorrow_iso)
+    success_save_new_date = database.save_or_update_1rm(
+        user_id, exercise, 110.0, tomorrow_iso
+    )
     assert success_save_new_date is True
     conn = database.get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ?", (user_id, exercise))
+    c.execute(
+        "SELECT COUNT(*) FROM user_1rm WHERE user_id = ? AND exercise = ?",
+        (user_id, exercise),
+    )
     count = c.fetchone()[0]
-    assert count == 2 # One for today, one for tomorrow
+    assert count == 2  # One for today, one for tomorrow
     conn.close()
 
 
-def test_get_latest_1rm(active_user): # Uses active_user fixture
+def test_get_latest_1rm(active_user):  # Uses active_user fixture
     user_id = active_user
     exercise = "Bench Press"
     today_iso = date.today().isoformat()
@@ -228,7 +257,7 @@ def test_get_latest_1rm(active_user): # Uses active_user fixture
     # 2. Log some 1RMs
     database.save_or_update_1rm(user_id, exercise, 80.0, yesterday_iso)
     database.save_or_update_1rm(user_id, exercise, 75.0, day_before_yesterday_iso)
-    database.save_or_update_1rm(user_id, exercise, 82.5, today_iso) # Most recent
+    database.save_or_update_1rm(user_id, exercise, 82.5, today_iso)  # Most recent
 
     latest = database.get_latest_1rm(user_id, exercise)
     assert latest is not None
@@ -249,13 +278,17 @@ def test_add_column_if_not_exists(test_db):  # Uses test_db fixture
     c = conn.cursor()
 
     # Test adding a new column
-    database._add_column_if_not_exists(c, "users", "email", "TEXT") # Use database._add_column_if_not_exists
+    database._add_column_if_not_exists(
+        c, "users", "email", "TEXT"
+    )  # Use database._add_column_if_not_exists
     c.execute("PRAGMA table_info(users)")
     columns = [row[1] for row in c.fetchall()]
     assert "email" in columns
 
     # Test attempting to add an existing column (should not fail or change schema)
-    database._add_column_if_not_exists(c, "users", "email", "TEXT") # Use database._add_column_if_not_exists
+    database._add_column_if_not_exists(
+        c, "users", "email", "TEXT"
+    )  # Use database._add_column_if_not_exists
     c.execute("PRAGMA table_info(users)")
     columns_after_second_call = [row[1] for row in c.fetchall()]
     assert columns == columns_after_second_call
@@ -423,20 +456,33 @@ def test_save_form_data_empty_payload_for_many(mock_st_environment):
 
 # --- AI Utils Function Tests ---
 # We need to import the ai_utils module to test its functions
-from ai_utils import extract_meal_data, ParsedMeals, FoodItem, meal_agent
+from ai_utils import extract_meal_data, DaySummary
 
-@patch('ai_utils.meal_agent.run_sync')
+
+@patch("ai_utils.meal_agent.run_sync")
 def test_extract_meal_data_success(mock_run_sync):
     # Mock the response from the AI agent
     mock_response_data = {
         "items": [
-            {"meal": "Breakfast", "food": "Oats", "quantity_g": 50, "calories": 150, "protein_g": 5},
-            {"meal": "Lunch", "food": "Chicken Salad", "quantity_g": 200, "calories": 300, "protein_g": 30}
+            {
+                "meal": "Breakfast",
+                "food": "Oats",
+                "quantity_g": 50,
+                "calories": 150,
+                "protein_g": 5,
+            },
+            {
+                "meal": "Lunch",
+                "food": "Chicken Salad",
+                "quantity_g": 200,
+                "calories": 300,
+                "protein_g": 30,
+            },
         ],
         "total_calories": 450,
-        "total_protein_g": 35
+        "total_protein_g": 35,
     }
-    mock_run_sync.return_value = ParsedMeals(**mock_response_data)
+    mock_run_sync.return_value = DaySummary(**mock_response_data)
 
     free_text = "Breakfast: Oats 50g. Lunch: Chicken Salad 200g."
     result = extract_meal_data(free_text)
@@ -445,15 +491,11 @@ def test_extract_meal_data_success(mock_run_sync):
     mock_run_sync.assert_called_once_with(free_text)
 
 
-@patch('ai_utils.meal_agent.run_sync')
+@patch("ai_utils.meal_agent.run_sync")
 def test_extract_meal_data_empty_items(mock_run_sync):
     # Mock the AI agent returning no items but valid totals (as per Pydantic model)
-    mock_response_data = {
-        "items": [],
-        "total_calories": 0,
-        "total_protein_g": 0
-    }
-    mock_run_sync.return_value = ParsedMeals(**mock_response_data)
+    mock_response_data = {"items": [], "total_calories": 0, "total_protein_g": 0}
+    mock_run_sync.return_value = DaySummary(**mock_response_data)
 
     free_text = "Nothing eaten today."
     result = extract_meal_data(free_text)
@@ -465,17 +507,13 @@ def test_extract_meal_data_empty_items(mock_run_sync):
 def test_extract_meal_data_empty_input_string():
     # Test with empty or whitespace-only string, should not call agent
     # and should return the default empty structure.
-    expected_empty_result = {
-        "items": [],
-        "total_calories": 0,
-        "total_protein_g": 0
-    }
+    expected_empty_result = {"items": [], "total_calories": 0, "total_protein_g": 0}
     assert extract_meal_data("") == expected_empty_result
     assert extract_meal_data("   ") == expected_empty_result
     # meal_agent.run_sync should not have been called, so no need to mock it here.
 
 
-@patch('ai_utils.meal_agent.run_sync')
+@patch("ai_utils.meal_agent.run_sync")
 def test_extract_meal_data_agent_failure_or_malformed_response(mock_run_sync):
     # If the agent fails or returns something that doesn't match ParsedMeals,
     # Pydantic validation within meal_agent.run_sync or during ParsedMeals instantiation
