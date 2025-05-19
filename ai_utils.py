@@ -1,10 +1,10 @@
 # ai_utils.py
-import os
 import json
-from typing import Literal, List
-from pydantic import BaseModel, conint
+import os
+from typing import List, Literal
+
+from pydantic import BaseModel, ConfigDict, conint
 from pydantic_ai import Agent
-from pydantic import BaseModel, conint, ConfigDict
 
 
 # ---------- 1.  Structured output -----------------
@@ -67,4 +67,4 @@ def extract_meal_data(free_text: str) -> DaySummary:
         # Return a structure that indicates no data, matching DaySummary
         return DaySummary(items=[], total_calories=0, total_protein_g=0)
     parsed: DaySummary = meal_agent.run_sync(free_text)
-    return parsed  # Return the DaySummary Pydantic object itself
+    return parsed.output

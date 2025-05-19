@@ -2,30 +2,32 @@
 # Streamlit 4-Week Strength & Conditioning Tracker
 # Mobile-friendly with full functionality
 
-import streamlit as st
+import os  # For OPENAI_API_KEY
 from datetime import date
-import os # For OPENAI_API_KEY
-from typing import Dict, List # Added import
+from typing import Dict, List  # Added import
+
+import streamlit as st
 
 # Project specific imports
 from database import (
+    create_user_in_db,  # Used in show_login_signup_forms
+    get_user_from_db,  # Used in show_login_signup_forms
     init_db,
-    verify_password, # Used in show_login_signup_forms
-    create_user_in_db, # Used in show_login_signup_forms
-    get_user_from_db, # Used in show_login_signup_forms
-)
-# Tab rendering functions are now in ui_tabs.py
-from ui_tabs import (
-    render_guide_tab,
-    render_resistance_tab,
-    render_mobility_tab,
-    render_cardio_tab,
-    render_nutrition_tab,
-    render_profile_tab,
-    render_logs_tab,
+    verify_password,  # Used in show_login_signup_forms
 )
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") # Used by render_nutrition_tab
+# Tab rendering functions are now in ui_tabs.py
+from ui_tabs import (
+    render_cardio_tab,
+    render_guide_tab,
+    render_logs_tab,
+    render_mobility_tab,
+    render_nutrition_tab,
+    render_profile_tab,
+    render_resistance_tab,
+)
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Used by render_nutrition_tab
 
 # --- Page Config & Styles ---
 st.set_page_config(
@@ -100,6 +102,7 @@ weekly_resistance: Dict[str, List[Dict[str, str]]] = {
 # Note: The global 'conn' object is removed. Connections are now managed per function.
 # Helper functions like get_target_params_for_set, _save_form_data, load_table, fetch_last
 # have been moved to ui_tabs.py as they are primarily used by the tab rendering logic.
+
 
 # --- Login/Signup UI ---
 # This remains in app.py as it's part of the core app structure before tabs are shown.
@@ -184,7 +187,7 @@ else:
 
     # Resistance Tab
     with tabs[1]:
-        render_resistance_tab(weekly_resistance) # Pass weekly_resistance
+        render_resistance_tab(weekly_resistance)  # Pass weekly_resistance
 
     # Mobility Tab
     with tabs[2]:
@@ -196,7 +199,7 @@ else:
 
     # Nutrition Tab (New tab, index 4)
     with tabs[4]:
-        render_nutrition_tab(OPENAI_API_KEY) # Pass OPENAI_API_KEY
+        render_nutrition_tab(OPENAI_API_KEY)  # Pass OPENAI_API_KEY
 
     # Profile Tab
     with tabs[5]:  # Index updated from 4 to 5
