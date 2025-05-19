@@ -252,15 +252,61 @@ def get_latest_1rm(user_id: int, exercise: str) -> Optional[sqlite3.Row]:
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""
-        SELECT one_rep_max, date FROM user_1rm
+        SELECT id, one_rep_max, date FROM user_1rm
         WHERE user_id = ? AND exercise = ?
         ORDER BY date DESC
         LIMIT 1
     """, (user_id, exercise))
     result = c.fetchone()
     conn.close()
-    return result # Returns a Row object (e.g., result['one_rep_max']) or None
+    return result # Returns a Row object (e.g., result['id'], result['one_rep_max']) or None
 
+
+# --- Deletion Helpers ---
+
+def delete_resistance_set_from_db(set_id: int, user_id: int) -> bool:
+    """Deletes a specific resistance set entry for a user."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM resistance WHERE id = ? AND user_id = ?", (set_id, user_id))
+        conn.commit()
+        return c.rowcount > 0 # True if a row was deleted
+    except sqlite3.Error: # pragma: no cover
+        return False
+    finally:
+        conn.close()
+
+
+def delete_nutrition_log_from_db(log_id: int, user_id: int) -> bool:
+    """Deletes a specific nutrition log entry for a user."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM nutrition_log WHERE id = ? AND user_id = ?", (log_id, user_id))
+        conn.commit()
+        return c.rowcount > 0 # True if a row was deleted
+    except sqlite3.Error: # pragma: no cover
+        return False
+    finally:
+        conn.close()
+
+
+def delete_1rm_from_db(rm_id: int, user_id: int) -> bool:
+    """Deletes a specific 1RM record for a user."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM user_1rm WHERE id = ? AND user_id = ?", (rm_id, user_id))
+        conn.commit()
+        return c.rowcount > 0 # True if a row was deleted
+    except sqlite3.Error: # pragma: no cover
+        return False
+    finally:
+        conn.close()
+
+
+# --- User Management Helpers ---
 
 def get_user_from_db(username: str) -> Optional[sqlite3.Row]:
     conn = get_db_connection()
