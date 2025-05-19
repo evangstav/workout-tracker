@@ -111,6 +111,19 @@ def init_db() -> None:
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
 
+    # Nutrition Log table
+    c.execute("""CREATE TABLE IF NOT EXISTS nutrition_log(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        meal_description TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, date),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+    )""")
+    # No need for _add_column_if_not_exists for user_id on a new table
+
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
     first_user = c.fetchone()
@@ -188,6 +201,40 @@ def save_or_update_1rm(user_id: int, exercise: str, one_rep_max: float, rm_date:
         return False
     finally:
         conn.close()
+
+
+def save_or_update_nutrition_log(user_id: int, entry_date: str, meal_description: str) -> bool:
+    """Saves (inserts or updates) a nutrition log entry for a given user and date."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("""
+            INSERT INTO nutrition_log (user_id, date, meal_description, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, date) DO UPDATE SET
+                meal_description = excluded.meal_description,
+                updated_at = CURRENT_TIMESTAMP
+        """, (user_id, entry_date, meal_description))
+        conn.commit()
+        return True
+    except sqlite3.Error: # pragma: no cover
+        return False
+    finally:
+        conn.close()
+
+
+def get_nutrition_log_by_date(user_id: int, entry_date: str) -> Optional[sqlite3.Row]:
+    """Fetches a nutrition log entry for a specific user and date."""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, meal_description, created_at, updated_at
+        FROM nutrition_log
+        WHERE user_id = ? AND date = ?
+    """, (user_id, entry_date))
+    result = c.fetchone()
+    conn.close()
+    return result
 
 
 def get_latest_1rm(user_id: int, exercise: str) -> Optional[sqlite3.Row]:
