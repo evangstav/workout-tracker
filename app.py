@@ -22,7 +22,7 @@ from database import (
     save_or_update_nutrition_log,
     get_nutrition_log_by_date,
 )
-from ai_utils import extract_meal_data
+from ai_utils import extract_meal_data, DaySummary
 
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
