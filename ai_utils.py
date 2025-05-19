@@ -67,4 +67,4 @@ def extract_meal_data(free_text: str) -> DaySummary:
         # Return a structure that indicates no data, matching DaySummary
         return DaySummary(items=[], total_calories=0, total_protein_g=0)
     parsed: DaySummary = meal_agent.run_sync(free_text)
-    return parsed.output  # Return the DaySummary Pydantic object itself
+    return parsed  # Return the DaySummary Pydantic object itself
