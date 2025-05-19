@@ -521,6 +521,24 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
             existing_log_nutrition = get_nutrition_log_by_date(
                 current_user_id, log_date_str_nutrition
             )
+
+            # If existing log has stored nutritional info and no fresh analysis is in session state,
+            # populate session state to display stored metrics.
+            if existing_log_nutrition and \
+               existing_log_nutrition['total_calories'] is not None and \
+               existing_log_nutrition['total_protein_g'] is not None and \
+               st.session_state.analyzed_nutrition_content is None:
+                try:
+                    db_summary = DaySummary(
+                        total_calories=existing_log_nutrition['total_calories'],
+                        total_protein_g=existing_log_nutrition['total_protein_g'],
+                        items=[] # Items are not stored in DB, only totals. AI re-analysis populates items.
+                    )
+                    st.session_state.analyzed_nutrition_content = db_summary
+                except Exception as e: # pragma: no cover
+                    print(f"Error creating DaySummary from DB data for display: {e}")
+                    # analyzed_nutrition_content remains None, so no metrics shown initially
+
             default_description_nutrition = (
                 existing_log_nutrition["meal_description"]
                 if existing_log_nutrition
@@ -548,8 +566,21 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                 st.info("OpenAI API Key not configured. AI analysis features disabled.")
 
             if st.button("Save Meal Log", key="save_nutrition_log"):
+                calories_to_save = None
+                protein_to_save = None
+                current_analysis = st.session_state.get("analyzed_nutrition_content")
+                if current_analysis and isinstance(current_analysis, DaySummary):
+                    if hasattr(current_analysis, 'total_calories'):
+                        calories_to_save = current_analysis.total_calories
+                    if hasattr(current_analysis, 'total_protein_g'):
+                        protein_to_save = current_analysis.total_protein_g
+                
                 if save_or_update_nutrition_log(
-                    current_user_id, log_date_str_nutrition, meal_description_nutrition
+                    current_user_id,
+                    log_date_str_nutrition,
+                    meal_description_nutrition,
+                    total_calories=calories_to_save,
+                    total_protein_g=protein_to_save
                 ):
                     st.success("Meal log saved successfully.")
                     st.cache_data.clear()  # Clear cache to refresh logs and current view
@@ -568,12 +599,9 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
 
             analyzed_content = st.session_state.get("analyzed_nutrition_content")
             print(analyzed_content)  # Debugging line to check the content
-            if analyzed_content is not None:
+            if analyzed_content is not None and isinstance(analyzed_content, DaySummary):
                 st.subheader("AI Extracted Meal Details")
-                if (
-                    "total_calories" in analyzed_content
-                    and "total_protein_g" in analyzed_content
-                ):
+                if hasattr(analyzed_content, "total_calories") and hasattr(analyzed_content, "total_protein_g"):
                     st.metric(
                         label="Total Estimated Calories",
                         value=f"{analyzed_content.total_calories} kcal",
@@ -583,13 +611,18 @@ _Tweaks:_ add 87–90% top set + increase accessory volume to 12–16 weekly set
                         value=f"{analyzed_content.total_protein_g} g",
                     )
 
-                # Display the full JSON for transparency or if totals are missing
-                st.json(analyzed_content)
-                print(type(analyzed_content))  # Debugging line to check the type
-                if not analyzed_content.items:
+                # Display the full JSON (model dump) for transparency or if totals are missing
+                st.json(analyzed_content.model_dump()) # Use model_dump() for Pydantic object
+                
+                if not analyzed_content.items: # Access items attribute directly
                     st.caption(
                         "No specific food items were extracted, or no details found in the text."
                     )
+            elif analyzed_content is not None: # It's not None, but not DaySummary (e.g. old format dict)
+                 st.subheader("AI Extracted Meal Details") # pragma: no cover
+                 st.json(analyzed_content) # Display as is
+                 st.caption("Displayed data may be in an older format or could not be fully processed.")
+
 
             st.divider()
             st.subheader("Meal Log History")

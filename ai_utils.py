@@ -61,10 +61,10 @@ meal_agent = Agent(
 
 
 # ---------- 4.  Utility that the Streamlit app calls -------------
-def extract_meal_data(free_text: str) -> dict:
-    """Return a dict representing the ParsedMeals object, including totals and items."""
+def extract_meal_data(free_text: str) -> DaySummary:
+    """Return a DaySummary object, including totals and items."""
     if not free_text or not free_text.strip():
-        # Return a structure that indicates no data, matching ParsedMeals
+        # Return a structure that indicates no data, matching DaySummary
         return DaySummary(items=[], total_calories=0, total_protein_g=0)
     parsed: DaySummary = meal_agent.run_sync(free_text)
-    return parsed.output  # Pydantic v2 syntax
+    return parsed  # Return the DaySummary Pydantic object itself

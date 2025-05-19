@@ -462,54 +462,71 @@ from ai_utils import extract_meal_data, DaySummary
 @patch("ai_utils.meal_agent.run_sync")
 def test_extract_meal_data_success(mock_run_sync):
     # Mock the response from the AI agent
-    mock_response_data = {
-        "items": [
-            {
-                "meal": "Breakfast",
-                "food": "Oats",
-                "quantity_g": 50,
-                "calories": 150,
-                "protein_g": 5,
-            },
-            {
-                "meal": "Lunch",
-                "food": "Chicken Salad",
-                "quantity_g": 200,
-                "calories": 300,
-                "protein_g": 30,
-            },
-        ],
+    # Ensure keys match FoodItem model: meal_type, food_name
+    mock_food_items_data = [
+        {
+            "meal_type": "Breakfast",
+            "food_name": "Oats",
+            "quantity_g": 50,
+            "calories": 150,
+            "protein_g": 5,
+        },
+        {
+            "meal_type": "Lunch",
+            "food_name": "Chicken Salad",
+            "quantity_g": 200,
+            "calories": 300,
+            "protein_g": 30,
+        },
+    ]
+    mock_day_summary_data = {
+        "items": mock_food_items_data,
         "total_calories": 450,
         "total_protein_g": 35,
     }
-    mock_run_sync.return_value = DaySummary(**mock_response_data)
+    mock_run_sync.return_value = DaySummary(**mock_day_summary_data)
 
     free_text = "Breakfast: Oats 50g. Lunch: Chicken Salad 200g."
-    result = extract_meal_data(free_text)
+    result: DaySummary = extract_meal_data(free_text) # extract_meal_data returns DaySummary object
 
-    assert result == mock_response_data
+    assert isinstance(result, DaySummary)
+    assert result.total_calories == mock_day_summary_data["total_calories"]
+    assert result.total_protein_g == mock_day_summary_data["total_protein_g"]
+    assert [item.model_dump() for item in result.items] == mock_food_items_data
     mock_run_sync.assert_called_once_with(free_text)
 
 
 @patch("ai_utils.meal_agent.run_sync")
 def test_extract_meal_data_empty_items(mock_run_sync):
-    # Mock the AI agent returning no items but valid totals (as per Pydantic model)
-    mock_response_data = {"items": [], "total_calories": 0, "total_protein_g": 0}
-    mock_run_sync.return_value = DaySummary(**mock_response_data)
+    # Mock the AI agent returning no items but valid totals
+    mock_day_summary_data = {"items": [], "total_calories": 0, "total_protein_g": 0}
+    mock_run_sync.return_value = DaySummary(**mock_day_summary_data)
 
     free_text = "Nothing eaten today."
-    result = extract_meal_data(free_text)
+    result: DaySummary = extract_meal_data(free_text)
 
-    assert result == mock_response_data
+    assert isinstance(result, DaySummary)
+    assert result.total_calories == mock_day_summary_data["total_calories"]
+    assert result.total_protein_g == mock_day_summary_data["total_protein_g"]
+    assert len(result.items) == 0
     mock_run_sync.assert_called_once_with(free_text)
 
 
 def test_extract_meal_data_empty_input_string():
     # Test with empty or whitespace-only string, should not call agent
-    # and should return the default empty structure.
-    expected_empty_result = {"items": [], "total_calories": 0, "total_protein_g": 0}
-    assert extract_meal_data("") == expected_empty_result
-    assert extract_meal_data("   ") == expected_empty_result
+    # and should return the default empty DaySummary structure.
+    result_empty_str: DaySummary = extract_meal_data("")
+    result_space_str: DaySummary = extract_meal_data("   ")
+
+    assert isinstance(result_empty_str, DaySummary)
+    assert result_empty_str.total_calories == 0
+    assert result_empty_str.total_protein_g == 0
+    assert len(result_empty_str.items) == 0
+
+    assert isinstance(result_space_str, DaySummary)
+    assert result_space_str.total_calories == 0
+    assert result_space_str.total_protein_g == 0
+    assert len(result_space_str.items) == 0
     # meal_agent.run_sync should not have been called, so no need to mock it here.
 
 
@@ -524,3 +541,79 @@ def test_extract_meal_data_agent_failure_or_malformed_response(mock_run_sync):
 
     with pytest.raises(Exception, match="AI agent failed"):
         extract_meal_data("Some complex meal text that might break the agent")
+
+
+# --- Database Function Tests for Nutrition Log ---
+
+def test_save_and_get_nutrition_log_with_totals(active_user): # uses test_db via active_user
+    user_id = active_user
+    entry_date = date.today().isoformat()
+    meal_description = "Breakfast: Cereal, Lunch: Sandwich"
+    total_calories = 1200
+    total_protein_g = 50
+
+    # Save with totals
+    save_success = database.save_or_update_nutrition_log(
+        user_id, entry_date, meal_description, total_calories, total_protein_g
+    )
+    assert save_success is True
+
+    # Get and verify
+    log_entry = database.get_nutrition_log_by_date(user_id, entry_date)
+    assert log_entry is not None
+    assert log_entry["meal_description"] == meal_description
+    assert log_entry["total_calories"] == total_calories
+    assert log_entry["total_protein_g"] == total_protein_g
+
+    # Update with new totals
+    updated_meal_description = "Dinner: Pasta"
+    updated_calories = 800
+    updated_protein = 30
+    update_success = database.save_or_update_nutrition_log(
+        user_id, entry_date, updated_meal_description, updated_calories, updated_protein
+    )
+    assert update_success is True
+
+    log_entry_updated = database.get_nutrition_log_by_date(user_id, entry_date)
+    assert log_entry_updated is not None
+    assert log_entry_updated["meal_description"] == updated_meal_description
+    assert log_entry_updated["total_calories"] == updated_calories
+    assert log_entry_updated["total_protein_g"] == updated_protein
+
+
+def test_save_and_get_nutrition_log_without_totals(active_user): # uses test_db
+    user_id = active_user
+    entry_date = (date.today() + pd.Timedelta(days=1)).isoformat() # Different date
+    meal_description = "Snacks: Apple and nuts"
+
+    # Save without totals (should store NULLs)
+    save_success = database.save_or_update_nutrition_log(
+        user_id, entry_date, meal_description # total_calories and total_protein_g default to None
+    )
+    assert save_success is True
+
+    log_entry = database.get_nutrition_log_by_date(user_id, entry_date)
+    assert log_entry is not None
+    assert log_entry["meal_description"] == meal_description
+    assert log_entry["total_calories"] is None
+    assert log_entry["total_protein_g"] is None
+
+    # Update existing entry that had NULLs, now with totals
+    updated_calories = 300
+    updated_protein = 10
+    update_success_with_totals = database.save_or_update_nutrition_log(
+        user_id, entry_date, meal_description, updated_calories, updated_protein
+    )
+    assert update_success_with_totals is True
+
+    log_entry_now_with_totals = database.get_nutrition_log_by_date(user_id, entry_date)
+    assert log_entry_now_with_totals is not None
+    assert log_entry_now_with_totals["total_calories"] == updated_calories
+    assert log_entry_now_with_totals["total_protein_g"] == updated_protein
+
+
+def test_get_nutrition_log_non_existent(active_user): # uses test_db
+    user_id = active_user
+    non_existent_date = "1999-01-01"
+    log_entry = database.get_nutrition_log_by_date(user_id, non_existent_date)
+    assert log_entry is None

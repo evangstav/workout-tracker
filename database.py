@@ -122,7 +122,8 @@ def init_db() -> None:
         UNIQUE(user_id, date),
         FOREIGN KEY (user_id) REFERENCES users(id)
     )""")
-    # No need for _add_column_if_not_exists for user_id on a new table
+    _add_column_if_not_exists(c, "nutrition_log", "total_calories", "INTEGER")
+    _add_column_if_not_exists(c, "nutrition_log", "total_protein_g", "INTEGER")
 
     # --- Data Migration: Assign existing orphan records to the first user ---
     c.execute("SELECT id FROM users ORDER BY id LIMIT 1")
@@ -203,18 +204,27 @@ def save_or_update_1rm(user_id: int, exercise: str, one_rep_max: float, rm_date:
         conn.close()
 
 
-def save_or_update_nutrition_log(user_id: int, entry_date: str, meal_description: str) -> bool:
-    """Saves (inserts or updates) a nutrition log entry for a given user and date."""
+def save_or_update_nutrition_log(
+    user_id: int,
+    entry_date: str,
+    meal_description: str,
+    total_calories: Optional[int] = None,
+    total_protein_g: Optional[int] = None
+) -> bool:
+    """Saves (inserts or updates) a nutrition log entry for a given user and date,
+    including optional total calories and protein."""
     conn = get_db_connection()
     c = conn.cursor()
     try:
         c.execute("""
-            INSERT INTO nutrition_log (user_id, date, meal_description, updated_at)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            INSERT INTO nutrition_log (user_id, date, meal_description, total_calories, total_protein_g, updated_at)
+            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(user_id, date) DO UPDATE SET
                 meal_description = excluded.meal_description,
+                total_calories = excluded.total_calories,
+                total_protein_g = excluded.total_protein_g,
                 updated_at = CURRENT_TIMESTAMP
-        """, (user_id, entry_date, meal_description))
+        """, (user_id, entry_date, meal_description, total_calories, total_protein_g))
         conn.commit()
         return True
     except sqlite3.Error: # pragma: no cover
@@ -228,7 +238,7 @@ def get_nutrition_log_by_date(user_id: int, entry_date: str) -> Optional[sqlite3
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""
-        SELECT id, meal_description, created_at, updated_at
+        SELECT id, meal_description, created_at, updated_at, total_calories, total_protein_g
         FROM nutrition_log
         WHERE user_id = ? AND date = ?
     """, (user_id, entry_date))
