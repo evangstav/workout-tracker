@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personalized Strength Plan Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --md-purple-500: #673AB7; /* Primary Purple */
+            --md-purple-700: #512DA8; /* Darker Purple for Headers/Accents */
+            --md-purple-100: #D1C4E9; /* Lighter Purple for backgrounds/hovers */
+            --md-grey-100: #f5f5f5;   /* Light grey for page background */
+            --md-grey-300: #e0e0e0;   /* Borders */
+            --md-grey-700: #616161;   /* Secondary text */
+            --md-grey-900: #212121;   /* Primary text */
+            --md-white: #FFFFFF;
+            --md-elevation-1: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+            --md-elevation-2: 0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23);
+            --md-elevation-4: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+        }
+
+        body { 
+            font-family: 'Roboto', sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            background-color: var(--md-grey-100); 
+            color: var(--md-grey-900); 
+            line-height: 1.6; 
+        }
+        .app-container { 
+            max-width: 900px; 
+            margin: 20px auto; 
+            background-color: var(--md-white); 
+            border-radius: 8px; 
+            box-shadow: var(--md-elevation-2);
+            overflow: hidden; /* To contain border-radius of children */
+        }
+        header { 
+            background-color: var(--md-purple-700); 
+            color: var(--md-white); 
+            padding: 24px; 
+            text-align: center; 
+        }
+        header h1 { 
+            margin: 0; 
+            font-size: 1.9em; 
+            font-weight: 500;
+        }
+        nav { 
+            display: flex; 
+            justify-content: center; 
+            background-color: var(--md-purple-500); 
+            padding: 8px 0; 
+            box-shadow: var(--md-elevation-1);
+            flex-wrap: wrap;
+        }
+        nav button { 
+            background-color: transparent; 
+            color: var(--md-purple-100); 
+            border: none; 
+            padding: 12px 18px; 
+            margin: 0; 
+            border-radius: 0px; /* Flat style for tabs */
+            cursor: pointer; 
+            font-size: 0.98em; 
+            font-weight: 500;
+            text-transform: uppercase;
+            transition: background-color 0.2s, color 0.2s; 
+            border-bottom: 3px solid transparent;
+        }
+        nav button:hover { 
+            background-color: rgba(255,255,255,0.1);
+            color: var(--md-white);
+        }
+        nav button.active { 
+            color: var(--md-white);
+            border-bottom: 3px solid var(--md-white); /* Active tab indicator */
+        }
+        .content-area { padding: 24px; }
+        .tab-content { display: none; } 
+        .tab-content.active { display: block; } 
+        .section { 
+            margin-bottom: 24px; 
+            padding: 20px; 
+            background-color: var(--md-white); 
+            border-radius: 6px; 
+            border: 1px solid var(--md-grey-300);
+            box-shadow: var(--md-elevation-1);
+        }
+        .section h2 { 
+            font-size: 1.6em; 
+            color: var(--md-purple-700); 
+            margin-top: 0; 
+            margin-bottom: 16px;
+            padding-bottom: 10px; 
+            border-bottom: 2px solid var(--md-purple-100); 
+            font-weight: 500;
+        }
+        .section h3 { 
+            font-size: 1.3em; 
+            color: var(--md-purple-500); 
+            margin-top: 20px; 
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .section h4 { 
+            font-size: 1.1em; 
+            color: var(--md-grey-900); 
+            margin-top: 16px; 
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .section ul { padding-left: 20px; margin-bottom: 16px; }
+        .section li { margin-bottom: 10px; color: var(--md-grey-700); }
+        
+        label { 
+            display: block; 
+            margin-top: 12px; 
+            margin-bottom: 4px;
+            font-weight: 500; 
+            color: var(--md-grey-700);
+            font-size: 0.9em;
+        }
+        input[type="text"], input[type="number"], select { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 4px; 
+            border: 1px solid var(--md-grey-300); 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            font-size: 1em;
+            background-color: var(--md-white);
+            color: var(--md-grey-900);
+            transition: border-color 0.2s;
+        }
+        input[type="text"]:focus, input[type="number"]:focus, select:focus {
+            border-color: var(--md-purple-500);
+            outline: none;
+            box-shadow: 0 0 0 2px var(--md-purple-100);
+        }
+
+        .inline-inputs { margin-bottom: 10px; }
+        .inline-inputs label { display: inline-block; margin-right: 5px; font-weight: normal; font-size: 0.95em;}
+        .inline-inputs input[type="number"], .inline-inputs input[type="text"] { 
+            width: 75px; 
+            display: inline-block; 
+            margin-right: 12px; 
+            padding: 8px;
+        }
+        
+        button.action-button, button.log-set-button, button.danger-button {
+            color: var(--md-white); 
+            padding: 10px 18px; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            margin-top: 12px; 
+            font-size: 0.95em;
+            font-weight: 500;
+            text-transform: uppercase;
+            box-shadow: var(--md-elevation-1);
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+        button.action-button { background-color: var(--md-purple-500); }
+        button.action-button:hover { background-color: var(--md-purple-700); box-shadow: var(--md-elevation-2); }
+        
+        button.log-set-button { background-color: #4CAF50; } /* Green for logging */
+        button.log-set-button:hover { background-color: #388E3C; box-shadow: var(--md-elevation-2); }
+        
+        button.danger-button { background-color: #f44336; } /* Red for danger */
+        button.danger-button:hover { background-color: #D32F2F; box-shadow: var(--md-elevation-2); }
+
+        .exercise-item { 
+            border-bottom: 1px solid var(--md-grey-300); 
+            padding-bottom: 16px; 
+            margin-bottom: 16px; 
+        }
+        .exercise-item:last-child { border-bottom: none; }
+        .exercise-details { font-size: 0.95em; color: var(--md-grey-700); margin-bottom: 8px; }
+        .exercise-notes { 
+            font-style: normal; 
+            font-size: 0.9em; 
+            color: var(--md-grey-700); 
+            background-color: var(--md-purple-100); 
+            padding: 10px; 
+            border-radius: 4px; 
+            margin-top: 8px;
+            border-left: 3px solid var(--md-purple-500);
+        }
+        
+        .e1rm-manage-section table { 
+            width: 100%; 
+            margin-top: 16px; 
+            border-collapse: collapse; 
+        }
+        .e1rm-manage-section th, .e1rm-manage-section td { 
+            border: 1px solid var(--md-grey-300); 
+            padding: 12px; 
+            text-align: left; 
+            font-size: 0.95em;
+        }
+        .e1rm-manage-section th { 
+            background-color: var(--md-purple-100); 
+            color: var(--md-purple-700);
+            font-weight: 500;
+        }
+        .e1rm-manage-section td input[type="number"] {
+            padding: 8px;
+            font-size: 0.95em;
+        }
+
+        .workout-log-entry { 
+            border: 1px solid var(--md-grey-300); 
+            padding: 12px; 
+            margin-top: 8px; 
+            border-radius: 4px; 
+            background-color: var(--md-white); 
+            font-size: 0.9em; 
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        #dailyWorkoutLogContainer { 
+            max-height: 250px; 
+            overflow-y: auto; 
+            margin-top:16px; 
+            border: 1px solid var(--md-grey-300); 
+            padding:10px; 
+            background-color: var(--md-grey-100);
+            border-radius: 4px;
+        }
+        .completed-marker { color: #4CAF50; font-weight: bold; margin-left: 10px; }
+        
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); backdrop-filter: blur(4px); }
+        .modal-content { 
+            background-color: var(--md-white); 
+            margin: 10% auto; 
+            padding: 24px; 
+            border-radius: 8px; 
+            width: 90%; 
+            max-width: 500px; 
+            box-shadow: var(--md-elevation-4);
+            position: relative;
+        }
+        .close-button { 
+            color: var(--md-grey-700); 
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            font-size: 32px; 
+            font-weight: bold; 
+            cursor: pointer; 
+            line-height: 1;
+        }
+        .close-button:hover, .close-button:focus { color: var(--md-grey-900); text-decoration: none; }
+        .modal-content h3 { color: var(--md-purple-700); margin-top: 0; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>My Training Plan</h1>
+        </header>
+        <nav id="mainNav">
+            <button data-tab="guideTab" onclick="showTab('guideTab')">Guide</button>
+            <button data-tab="e1rmTab" onclick="showTab('e1rmTab')">e1RMs</button>
+        </nav>
+        <div class="content-area">
+            <div id="guideTab" class="tab-content section">
+                <h2>Program Guide</h2>
+                <p>Welcome to your personalized strength and conditioning plan tracker! This guide will help you understand how to use the app and follow the program effectively.</p>
+
+                <h4>Core Principles:</h4>
+                <ul>
+                    <li><strong>Consistency is Key:</strong> Adherence to the plan over time will yield the best results. Show up and do the work.</li>
+                    <li><strong>Progressive Overload:</strong> The program is designed to help you gradually get stronger. This app helps by:
+                        <ul>
+                            <li>Calculating target weights based on your e1RM.</li>
+                            <li>Autoregulating your e1RM based on your performance (especially on heavy single sets). Aim to improve weight, reps, or perform sets at a lower RPE over time.</li>
+                        </ul>
+                    </li>
+                    <li><strong>RPE (Rating of Perceived Exertion):</strong>
+                        <ul>
+                            <li>Scale of 1-10, where 10 is maximal effort (0 reps left), 9 is 1 rep left (RIR 1), 8 is 2 reps left (RIR 2), etc.</li>
+                            <li>Use RPE honestly to guide your effort and help the app adjust your e1RM.</li>
+                            <li>Your plan often specifies target RPEs for activation and top sets (e.g., RPE 8-9).</li>
+                        </ul>
+                    </li>
+                    <li><strong>e1RM (Estimated 1 Rep Max):</strong>
+                        <ul>
+                            <li>This is an estimate of the maximum weight you can lift for one repetition.</li>
+                            <li>Set your initial e1RMs in the "e1RMs" tab for all core lifts.</li>
+                            <li>The app updates your e1RM for main lifts after you log "Activation Sets" and "Main Top Sets". The highest calculated e1RM from these sets in a session becomes your new e1RM for that lift.</li>
+                            <li>Accessory lifts that are also in the `CORE_LIFTS_IN_PLAN` list can also have their e1RMs updated if a logged set represents a new PR.</li>
+                        </ul>
+                    </li>
+                </ul>
+
+                <h4>Workout Structure:</h4>
+                <ul>
+                    <li><strong>Activation Sets (>90% 1RM):</strong> Perform 1 set of 3-5 reps. These prepare you for heavy lifting, allow practice with heavy loads, and contribute to e1RM updates.</li>
+                    <li><strong>Main Top Sets (e.g., 1x4 @ 88%):</strong> Your primary strength-building set for the main compound lifts. These also significantly contribute to e1RM updates.</li>
+                    <li><strong>Volume Sets (e.g., 3x6 @ 78%):</strong> Build muscle mass and work capacity. Target weights are based on the e1RM at the start of the session.</li>
+                    <li><strong>Accessory Lifts:</strong> Target specific muscle groups and support your main lifts. Aim for the prescribed reps/sets and an appropriate RPE (often 7-9).</li>
+                    <li><strong>Cardio (HIIT & Zone 2):</strong> Crucial for cardiovascular health ($VO_2$max) and endurance.
+                        <ul>
+                            <li>HIIT (e.g., Norwegian 4x4): Intense intervals.</li>
+                            <li>Zone 2: Longer, steady-state cardio at a conversational pace (~70% HRmax or RPE 9-12).</li>
+                        </ul>
+                    </li>
+                    <li><strong>Mobility:</strong> Focus on dynamic movements. Resistance training itself helps maintain flexibility.</li>
+                </ul>
+
+                <h4>Warm-ups & Rest:</h4>
+                <ul>
+                    <li><strong>Warm-ups:</strong> Perform dynamic, lift-specific warm-ups. Your plan mentions mini-band glute activation (Mon) and shoulder ER (Tue). One or two ramp-up sets for main lifts usually suffice.</li>
+                    <li><strong>Rest Periods:</strong>
+                        <ul>
+                            <li>After Activation/Main Top Sets: 2-5 minutes.</li>
+                            <li>Between Volume Sets: 2-3 minutes.</li>
+                            <li>Between Accessory Sets: As needed, typically 60-120 seconds.</li>
+                        </ul>
+                    </li>
+                </ul>
+                 <h4>Nutrition & Lifestyle (From Your Plan):</h4>
+                <ul>
+                    <li><strong>Protein:</strong> 1.6–2.2 g/kg/day (≥ 0.4 g/kg/meal).</li>
+                    <li><strong>Creatine Monohydrate:</strong> 3–5 g daily.</li>
+                    <li><strong>Omega‑3:</strong> Load 4 wks @ 3g EPA + 2g DHA, then ~2g total daily.</li>
+                    <li><strong>Calorie Balance:</strong> For recomp, maintain ≈10‑15 % kcal deficit with high protein.</li>
+                    <li><strong>Sleep:</strong> 7–9 hours; crucial for recovery and body composition.</li>
+                </ul>
+
+                <h4>How to Use This App:</h4>
+                <ol>
+                    <li><strong>Set Initial e1RMs:</strong> Go to the "e1RMs" tab and input your current estimated 1 Rep Max for all listed exercises. Click "Save All e1RMs". This is crucial for the app to calculate your target weights.</li>
+                    <li><strong>Select Workout Day:</strong> Click the appropriate day in the top navigation (e.g., "Monday").</li>
+                    <li><strong>Perform & Log:</strong>
+                        <ul>
+                            <li>For each exercise, the app will show target weights (if applicable).</li>
+                            <li>After performing a set, enter the actual weight lifted, reps performed, and RPE achieved.</li>
+                            <li>Click the "Log Set" button.</li>
+                            <li>For multi-set accessory exercises, a modal will appear for logging each set.</li>
+                            <li>For mobility/cardio, click "Mark Completed".</li>
+                        </ul>
+                    </li>
+                    <li><strong>Review:</strong> Check "Today's Log" to see your completed activities and any e1RM updates. Your e1RMs in the "e1RMs" tab will also reflect changes.</li>
+                </ol>
+                <p><em>This app uses your browser's local storage to save data. It will persist as long as you use the same browser and don't clear its site data.</em></p>
+            </div>
+
+            <div id="workoutDayTab" class="tab-content">
+                <div id="workoutDisplayArea" class="section">
+                    <h2 id="workoutDayTitle">Select a day</h2>
+                    {/* Workout items will be populated here by JavaScript */}
+                </div>
+
+                <div class="section">
+                    <h2>Today's Log (<span id="currentDateDisplay"></span>)</h2>
+                    <div id="dailyWorkoutLogContainer"></div>
+                    <button class="danger-button" onclick="clearDailyLog()" style="margin-top:10px;">Clear Today's Log</button>
+                </div>
+            </div>
+
+            <div id="e1rmTab" class="tab-content section e1rm-manage-section">
+                <h2>Manage e1RMs (kg/lbs)</h2>
+                <table>
+                    <thead><tr><th>Exercise</th><th>Current e1RM</th><th>New e1RM (Editable)</th></tr></thead>
+                    <tbody id="e1rmTableBody"></tbody>
+                </table>
+                <button id="saveAllE1RMsButton" class="action-button" onclick="saveAllE1RMsFromTable()">Save All e1RMs</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="accessoryLogModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <h3 id="modalTitle">Log Accessory Set</h3>
+            <input type="hidden" id="modalExerciseName">
+            <input type="hidden" id="modalSetIndex">
+            <label for="modalWeight">Weight:</label>
+            <input type="number" id="modalWeight" placeholder="Weight">
+            <label for="modalReps">Reps:</label>
+            <input type="number" id="modalReps" placeholder="Reps">
+            <label for="modalRPE">RPE (6-10):</label>
+            <input type="number" id="modalRPE" step="0.5" min="6" max="10" placeholder="RPE">
+            <button class="action-button" onclick="submitAccessorySetLog()">Log Set</button>
+        </div>
+    </div>
+
+    <script>
+        // RPE to Reps In Reserve mapping
+        const RPE_TO_RIR = { 10: 0, 9.5: 0.5, 9: 1, 8.5: 1.5, 8: 2, 7.5: 2.5, 7: 3, 6.5: 3.5, 6: 4 };
+        // Core lifts for which e1RM will be tracked
+        const CORE_LIFTS_IN_PLAN = ["Back-squat", "Bench Press", "Deadlift", "OHP", "Weighted Pull-up", "Hip-thrust", "RDL", "Dips", "Chest-supported Row"];
+
+        // The user's workout plan structure
+        const USER_WORKOUT_PLAN = {
+            "Monday": [
+                { id:"mon_bs_activation", type: "strength_single_heavy", liftName: "Back-squat", sets: 1, repsTarget: 3, percentage: 0.92, group:"Back-squat", setLabel: "Activation Set (>90% 1RM)", notes: "Warm-up: Mini-band glute activation. Aim for 3-5 reps. RPE ~8.5-9.5. This set contributes to e1RM." },
+                { id:"mon_bs_top", type: "strength_single_heavy", liftName: "Back-squat", sets: 1, repsTarget: 4, percentage: 0.88, group:"Back-squat", setLabel: "Main Top Set", notes: "Rest 2-5 min after this set. Aim for RPE ~8-9. This set contributes to e1RM." },
+                { id:"mon_bs_vol", type: "strength_volume", liftName: "Back-squat", sets: 3, reps: 6, percentage: 0.78, group:"Back-squat", notes: "Rest 2-3 min between sets." },
+                { id:"mon_ht", type: "accessory", liftName: "Hip-thrust", sets: 4, reps: 8, notes: "Aim for RPE 7-9." }
+            ],
+            "Tuesday": [
+                { id:"tue_bp_activation", type: "strength_single_heavy", liftName: "Bench Press", sets: 1, repsTarget: 3, percentage: 0.92, group:"Bench Press", setLabel: "Activation Set (>90% 1RM)", notes: "Warm-up: Shoulder ER. Aim for 3-5 reps. RPE ~8.5-9.5. This set contributes to e1RM." },
+                { id:"tue_bp_top", type: "strength_single_heavy", liftName: "Bench Press", sets: 1, repsTarget: 4, percentage: 0.88, group:"Bench Press", setLabel: "Main Top Set", notes: "Rest 2-5 min after this set. Aim for RPE ~8-9. This set contributes to e1RM." },
+                { id:"tue_bp_vol", type: "strength_volume", liftName: "Bench Press", sets: 3, reps: 6, percentage: 0.78, group:"Bench Press", notes: "Rest 2-3 min between sets." },
+                { id:"tue_ohp", type: "accessory", liftName: "OHP", sets: 3, reps: 6, notes: "Aim for RPE 7-9. This lift also uses e1RM." },
+                { id:"tue_dips", type: "accessory", liftName: "Dips", sets: 3, reps: 10, notes: "Aim for RPE 7-9, or near failure if appropriate." }
+            ],
+            "Wednesday": [ { id:"wed_mob", type: "mobility", name: "Mobility Flow", notes: "Dynamic movements. Static stretching generally not needed if resistance training covers range of motion. Refer to §5 of your plan." } ],
+            "Thursday AM": [
+                { id:"thu_dl_activation", type: "strength_single_heavy", liftName: "Deadlift", sets: 1, repsTarget: 3, percentage: 0.92, group:"Deadlift", setLabel: "Activation Set (>90% 1RM)", notes: "Aim for 3-5 reps. RPE ~8.5-9.5. This set contributes to e1RM." },
+                { id:"thu_dl_top", type: "strength_single_heavy", liftName: "Deadlift", sets: 1, repsTarget: 3, percentage: 0.90, group:"Deadlift", setLabel: "Main Top Set", notes: "Rest 2-5 min after this set. Aim for RPE ~8-9. This set contributes to e1RM." },
+                { id:"thu_dl_vol", type: "strength_volume", liftName: "Deadlift", sets: 3, reps: 6, percentage: 0.80, group:"Deadlift", notes: "Rest 2-3 min between sets." },
+                { id:"thu_rdl", type: "accessory", liftName: "RDL", sets: 3, reps: 8, notes: "Aim for RPE 7-9." }
+            ],
+            "Thursday PM": [
+                { id:"thu_hiit", type: "hiit", name: "Norwegian 4x4", details: "4 min @ 85-95% HRmax / 3 min active recovery @ ~70% HRmax, x4 repeats. Total duration approx 38-40min incl warm-up/cool-down.", notes: "Optional: 10-min HIIT (10x60s @ 90% HRmax / 60s easy) every 2-3 weeks for variety. Largest VO2-max gains." },
+                { id:"thu_pullup", type: "accessory", liftName: "Weighted Pull-up", sets: 3, repsRange: "6-8", notes: "Aim for RPE 8-9. This lift uses e1RM." },
+                { id:"thu_row", type: "accessory", liftName: "Chest-supported Row", sets: 3, reps: 10, notes: "Aim for RPE 7-9." }
+            ],
+            "Saturday": [ { id:"sat_z2", type: "cardio", name: "Zone 2 Run", duration: "40-45 min", intensity: "~70% HRmax or RPE 9-12 (able to speak in sentences).", notes: "Consider extending to 60+ min for enhanced heart health benefits. Dynamic mobility is enough; resistance training itself maintains flexibility." } ],
+            "Sunday": [ { id:"sun_mob", type: "mobility", name: "Rest + Short Mobility", notes: "Focus on recovery. Gentle movements." } ]
+        };
+
+        // Global state variables
+        let exercisesE1RM = {}; 
+        let dailyLog = {};      
+        let currentSelectedDayKey = null; 
+        let currentActiveTab = 'guideTab'; 
+        const todayKey = new Date().toISOString().split('T')[0]; 
+
+        // Epley formula for e1RM calculation
+        function calculateEpleyE1RM(weight, reps) {
+            if (reps === 0 || weight === 0) return 0; 
+            if (reps === 1) return weight; 
+            return weight * (1 + (reps / 30));
+        }
+
+        // Calculates effective reps based on actual reps and RPE (using RIR)
+        function getEffectiveReps(actualReps, actualRPE) {
+            let effectiveReps = parseFloat(actualReps);
+            if (RPE_TO_RIR.hasOwnProperty(actualRPE)) {
+                effectiveReps += RPE_TO_RIR[actualRPE];
+            } else if (actualRPE < 6) { 
+                effectiveReps += (10 - actualRPE);
+            }
+            return effectiveReps;
+        }
+        
+        // Load data from localStorage
+        function loadData() {
+            const storedE1RMs = localStorage.getItem('personalizedPlanE1RMs_v4_material'); 
+            if (storedE1RMs) {
+                exercisesE1RM = JSON.parse(storedE1RMs);
+            } else { 
+                CORE_LIFTS_IN_PLAN.forEach(lift => exercisesE1RM[lift] = 0); 
+            }
+
+            const storedDailyLog = localStorage.getItem(`personalizedPlanDailyLog_v4_material_${todayKey}`); 
+            if (storedDailyLog) {
+                dailyLog = JSON.parse(storedDailyLog);
+            } else {
+                dailyLog = {}; 
+            }
+        }
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('personalizedPlanE1RMs_v4_material', JSON.stringify(exercisesE1RM));
+            localStorage.setItem(`personalizedPlanDailyLog_v4_material_${todayKey}`, JSON.stringify(dailyLog));
+        }
+
+        // Renders the e1RM management table
+        function renderE1RMTable() {
+            const tbody = document.getElementById('e1rmTableBody');
+            tbody.innerHTML = ''; 
+            CORE_LIFTS_IN_PLAN.forEach(liftName => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = liftName;
+                const currentE1RM = exercisesE1RM[liftName] || 0;
+                row.insertCell().textContent = currentE1RM.toFixed(1); 
+                
+                const inputCell = row.insertCell();
+                const input = document.createElement('input');
+                input.type = 'number';
+                input.value = currentE1RM.toFixed(1); 
+                input.setAttribute('data-lift', liftName);
+                // input.style.width = '80px'; // Width is handled by global input styles now
+                inputCell.appendChild(input);
+            });
+        }
+        
+        // Saves all e1RMs from the editable fields in the table
+        function saveAllE1RMsFromTable() {
+            const inputs = document.querySelectorAll('#e1rmTableBody input[data-lift]');
+            inputs.forEach(input => {
+                const liftName = input.getAttribute('data-lift');
+                const newE1RM = parseFloat(input.value);
+                if (!isNaN(newE1RM) && newE1RM >= 0) { 
+                    exercisesE1RM[liftName] = newE1RM;
+                }
+            });
+            saveData(); 
+            renderE1RMTable(); 
+            if (currentActiveTab === 'workoutDayTab' && currentSelectedDayKey) {
+                 displayWorkoutForDay(currentSelectedDayKey);
+            }
+            alert('e1RMs saved!');
+        }
+
+        // General function to show a tab and hide others
+        function showTab(tabId) {
+            currentActiveTab = tabId;
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(tabId).classList.add('active');
+
+            document.querySelectorAll('#mainNav button').forEach(btn => {
+                btn.classList.remove('active'); 
+            });
+
+            const activeNavButton = document.querySelector(`#mainNav button[data-tab='${tabId}']:not([data-day-key])`);
+            if (activeNavButton) { 
+                activeNavButton.classList.add('active');
+            } else if (tabId === 'workoutDayTab' && currentSelectedDayKey) { 
+                const activeDayButton = document.querySelector(`#mainNav button[data-day-key="${currentSelectedDayKey}"]`);
+                if (activeDayButton) activeDayButton.classList.add('active');
+            }
+        }
+        
+        // Displays the workout for the selected day
+        function displayWorkoutForDay(dayKey) {
+            currentSelectedDayKey = dayKey; 
+            showTab('workoutDayTab'); 
+
+            const displayArea = document.getElementById('workoutDisplayArea');
+            const dayTitleElement = document.getElementById('workoutDayTitle');
+            
+            if (dayTitleElement) { 
+                dayTitleElement.textContent = `${dayKey}'s Workout`;
+            }
+            displayArea.innerHTML = `<h2 id="workoutDayTitle">${dayKey}'s Workout</h2>`; 
+            
+            const workoutItems = USER_WORKOUT_PLAN[dayKey];
+            if (!workoutItems) {
+                displayArea.innerHTML += "<p>No workout scheduled for this day.</p>";
+                renderDailyLog(); 
+                return;
+            }
+
+            workoutItems.forEach(item => {
+                const itemDiv = document.createElement('div');
+                itemDiv.classList.add('exercise-item');
+                let e1RM = exercisesE1RM[item.group || item.liftName] || 0;
+                let targetWeight = 0;
+
+                let content = `<h3>${item.setLabel || item.name || item.liftName}</h3>`;
+                if (item.details) content += `<p class="exercise-details">${item.details}</p>`;
+
+                const isLogged = dailyLog[item.id] && dailyLog[item.id].completed;
+                const completedMark = isLogged ? ` <span class="completed-marker">✓ Logged</span>` : '';
+
+                if (item.type === 'strength_single_heavy' || item.type === 'strength_volume') {
+                    targetWeight = e1RM > 0 && item.percentage ? (e1RM * item.percentage).toFixed(1) : 'N/A (Set e1RM)';
+                    let repDisplay = item.repsTarget || item.reps;
+                    content += `<p class="exercise-details">${item.sets} set(s) of ${repDisplay} reps @ ~${targetWeight} kg/lbs (target)</p>`;
+                } else if (item.type === 'accessory') {
+                    let repDetail = item.reps ? `${item.reps} reps` : `${item.repsRange} reps`;
+                    content += `<p class="exercise-details">${item.sets} set(s) of ${repDetail}</p>`;
+                } else if (item.type === 'hiit' || item.type === 'cardio') {
+                     content += `<p class="exercise-details">Duration: ${item.duration || ''}, Intensity: ${item.intensity || ''}</p>`;
+                }
+
+                if (item.notes) content += `<p class="exercise-notes">${item.notes}</p>`;
+                
+                if (item.type === 'strength_single_heavy') {
+                    const prefillWt = dailyLog[item.id]?.actualWeight !== undefined ? dailyLog[item.id]?.actualWeight : targetWeight;
+                    content += `
+                        <div class="inline-inputs">
+                            <label>Actual Wt:</label><input type="number" id="${item.id}_weight" placeholder="Wt" value="${prefillWt}">
+                            <label>Reps:</label><input type="number" id="${item.id}_reps" placeholder="Reps" value="${dailyLog[item.id]?.actualReps || ''}">
+                            <label>RPE:</label><input type="number" id="${item.id}_rpe" step="0.5" min="6" max="10" placeholder="RPE" value="${dailyLog[item.id]?.actualRPE || ''}">
+                        </div>
+                        <button class="action-button log-set-button" onclick="logHeavyStrengthSet('${item.id}', '${item.group || item.liftName}')" ${isLogged ? 'disabled' : ''}>Log Set</button>
+                    `;
+                } else if (item.type === 'strength_volume') {
+                     for (let i = 1; i <= item.sets; i++) {
+                        const setLogged = dailyLog[item.id] && dailyLog[item.id][`set${i}`] && dailyLog[item.id][`set${i}`].completed;
+                        const setCompletedMark = setLogged ? ` <span class="completed-marker">✓</span>` : '';
+                        const setData = dailyLog[item.id]?.[`set${i}`];
+                        const prefillWeight = setData?.actualWeight !== undefined ? setData.actualWeight : targetWeight; 
+                        content += `
+                            <div class="inline-inputs" style="margin-top:5px;">
+                                <span>Set ${i} (Target: ${item.reps} reps @ ~${targetWeight} kg/lbs):</span><br>
+                                <label>Actual Wt:</label><input type="number" id="${item.id}_set${i}_weight" placeholder="Wt" value="${prefillWeight}">
+                                <label>Reps:</label><input type="number" id="${item.id}_set${i}_reps" placeholder="Reps" value="${setData?.actualReps || ''}">
+                                <label>RPE:</label><input type="number" id="${item.id}_set${i}_rpe" step="0.5" min="6" max="10" placeholder="RPE" value="${setData?.actualRPE || ''}">
+                                <button class="action-button log-set-button" style="padding: 5px 8px; font-size:0.8em;" onclick="logGenericSet('${item.id}', '${item.group || item.liftName}', ${i})" ${setLogged ? 'disabled' : ''}>Log Set ${i}</button> ${setCompletedMark}
+                            </div>`;
+                    }
+                } else if (item.type === 'accessory') {
+                    content += `<div>`;
+                    for (let i = 1; i <= item.sets; i++) {
+                        const setLogged = dailyLog[item.id] && dailyLog[item.id][`set${i}`] && dailyLog[item.id][`set${i}`].completed;
+                        const setCompletedMark = setLogged ? ` <span class="completed-marker">✓</span>` : '';
+                        const setData = dailyLog[item.id]?.[`set${i}`];
+                        const logDisplay = setData ? `(Logged: ${setData.actualWeight}x${setData.actualReps}@${setData.actualRPE}RPE)` : '';
+                        content += `<button class="action-button" style="margin-right:5px; margin-bottom:5px;" onclick="openAccessoryLogModal('${item.id}', '${item.liftName}', ${i})" ${setLogged ? 'disabled' : ''}>Log Set ${i}</button> ${setCompletedMark} <span style="font-size:0.8em;">${logDisplay}</span> <br>`;
+                    }
+                    content += `</div>`;
+                } else if (item.type === 'mobility' || item.type === 'hiit' || item.type === 'cardio') {
+                    content += `<button class="action-button" onclick="logActivityAsCompleted('${item.id}')" ${isLogged ? 'disabled' : ''}>Mark Completed</button>`;
+                }
+                itemDiv.innerHTML = content + completedMark; 
+                displayArea.appendChild(itemDiv);
+            });
+             renderDailyLog(); 
+        }
+
+        function logHeavyStrengthSet(itemId, groupName) {
+            const weight = parseFloat(document.getElementById(`${itemId}_weight`).value);
+            const reps = parseInt(document.getElementById(`${itemId}_reps`).value);
+            const rpe = parseFloat(document.getElementById(`${itemId}_rpe`).value);
+
+            if (isNaN(weight) || isNaN(reps) || isNaN(rpe) || weight <=0 || reps <=0 ) {
+                alert('Please enter valid positive weight, reps, and RPE for the set.');
+                return;
+            }
+            
+            const e1RMAtSetStart = exercisesE1RM[groupName] || 0; 
+            const effectiveReps = getEffectiveReps(reps, rpe);
+            const e1RMCalcFromSet = calculateEpleyE1RM(weight, effectiveReps);
+
+            let finalGroupE1RM = e1RMAtSetStart;
+            if (e1RMCalcFromSet > 0) {
+                finalGroupE1RM = Math.max(e1RMAtSetStart, e1RMCalcFromSet);
+                exercisesE1RM[groupName] = finalGroupE1RM;
+            }
+
+            dailyLog[itemId] = { 
+                completed: true, 
+                actualWeight: weight, 
+                actualReps: reps, 
+                actualRPE: rpe, 
+                e1RMAtSetStart: e1RMAtSetStart, 
+                e1RMCalcFromSet: e1RMCalcFromSet,
+                groupE1RMAfterSet: finalGroupE1RM 
+            };
+            saveData();
+            renderE1RMTable(); 
+            displayWorkoutForDay(currentSelectedDayKey); 
+            alert(`${groupName} set logged. Group e1RM is now ${finalGroupE1RM.toFixed(1)}.`);
+        }
+
+        function logGenericSet(itemId, groupName, setIndex) {
+            const weightInput = document.getElementById(`${itemId}_set${setIndex}_weight`);
+            const repsInput = document.getElementById(`${itemId}_set${setIndex}_reps`);
+            const rpeInput = document.getElementById(`${itemId}_set${setIndex}_rpe`);
+
+            const weight = parseFloat(weightInput.value);
+            const reps = parseInt(repsInput.value);
+            const rpe = parseFloat(rpeInput.value);
+            
+            if (isNaN(weight) || isNaN(reps) || isNaN(rpe) || weight < 0 || reps < 0) { 
+                alert(`Please enter valid weight, reps, and RPE for Set ${setIndex}.`);
+                return;
+            }
+
+            if (!dailyLog[itemId]) dailyLog[itemId] = { completed: false }; 
+            if (!dailyLog[itemId][`set${setIndex}`]) dailyLog[itemId][`set${setIndex}`] = {};
+            
+            dailyLog[itemId][`set${setIndex}`] = { completed: true, actualWeight: weight, actualReps: reps, actualRPE: rpe };
+            
+            const planItem = USER_WORKOUT_PLAN[currentSelectedDayKey].find(it => it.id === itemId);
+            let allSetsDone = true;
+            if (planItem && planItem.sets) {
+                for (let i = 1; i <= planItem.sets; i++) {
+                    if (!dailyLog[itemId]?.[`set${i}`]?.completed) {
+                        allSetsDone = false;
+                        break;
+                    }
+                }
+            }
+            if(allSetsDone) dailyLog[itemId].completed = true;
+
+            if (CORE_LIFTS_IN_PLAN.includes(groupName)) {
+                const e1RMAtSetStart = exercisesE1RM[groupName] || 0;
+                const effectiveReps = getEffectiveReps(reps, rpe);
+                const e1RMCalcFromSet = calculateEpleyE1RM(weight, effectiveReps);
+                if (e1RMCalcFromSet > 0 && e1RMCalcFromSet > e1RMAtSetStart) { 
+                    exercisesE1RM[groupName] = e1RMCalcFromSet; 
+                    dailyLog[itemId][`set${setIndex}`].newGroupE1RM = e1RMCalcFromSet; 
+                }
+            }
+
+            saveData();
+            renderE1RMTable();
+            displayWorkoutForDay(currentSelectedDayKey);
+            alert(`${groupName} Set ${setIndex} logged.`);
+        }
+        
+        function openAccessoryLogModal(itemId, liftName, setIndex) {
+            document.getElementById('modalTitle').textContent = `Log Set ${setIndex} for ${liftName}`;
+            document.getElementById('modalExerciseName').value = liftName; 
+            document.getElementById('modalSetIndex').value = setIndex;     
+            document.getElementById('accessoryLogModal').setAttribute('data-item-id', itemId); 
+
+            const existingLog = dailyLog[itemId]?.[`set${setIndex}`];
+            document.getElementById('modalWeight').value = existingLog?.actualWeight || '';
+            document.getElementById('modalReps').value = existingLog?.actualReps || '';
+            document.getElementById('modalRPE').value = existingLog?.actualRPE || '';
+            
+            document.getElementById('accessoryLogModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('accessoryLogModal').style.display = 'none';
+        }
+
+        function submitAccessorySetLog() {
+            const itemId = document.getElementById('accessoryLogModal').getAttribute('data-item-id');
+            const liftName = document.getElementById('modalExerciseName').value;
+            const setIndex = parseInt(document.getElementById('modalSetIndex').value);
+            
+            const weight = parseFloat(document.getElementById('modalWeight').value);
+            const reps = parseInt(document.getElementById('modalReps').value);
+            const rpe = parseFloat(document.getElementById('modalRPE').value);
+
+            if (isNaN(weight) || isNaN(reps) || isNaN(rpe) || weight < 0 || reps < 0) {
+                alert('Please enter valid weight, reps, and RPE.');
+                return;
+            }
+
+            if (!dailyLog[itemId]) dailyLog[itemId] = { completed: false };
+            if (!dailyLog[itemId][`set${setIndex}`]) dailyLog[itemId][`set${setIndex}`] = {};
+
+            dailyLog[itemId][`set${setIndex}`] = { completed: true, actualWeight: weight, actualReps: reps, actualRPE: rpe };
+
+            const planItem = USER_WORKOUT_PLAN[currentSelectedDayKey].find(it => it.id === itemId);
+            let allSetsDone = true;
+            if (planItem && planItem.sets) {
+                for (let i = 1; i <= planItem.sets; i++) {
+                    if (!dailyLog[itemId]?.[`set${i}`]?.completed) {
+                        allSetsDone = false;
+                        break;
+                    }
+                }
+            }
+             if(allSetsDone) dailyLog[itemId].completed = true;
+
+            if (CORE_LIFTS_IN_PLAN.includes(liftName)) {
+                const e1RMAtSetStart = exercisesE1RM[liftName] || 0;
+                const effectiveReps = getEffectiveReps(reps, rpe);
+                const e1RMCalcFromSet = calculateEpleyE1RM(weight, effectiveReps);
+                if (e1RMCalcFromSet > 0 && e1RMCalcFromSet > e1RMAtSetStart) { 
+                    exercisesE1RM[liftName] = e1RMCalcFromSet;
+                    dailyLog[itemId][`set${setIndex}`].newGroupE1RM = e1RMCalcFromSet;
+                }
+            }
+            
+            saveData();
+            renderE1RMTable();
+            displayWorkoutForDay(currentSelectedDayKey);
+            closeModal();
+            alert(`${liftName} Set ${setIndex} logged.`);
+        }
+
+        function logActivityAsCompleted(itemId) {
+            dailyLog[itemId] = { completed: true, loggedAt: new Date().toLocaleTimeString() };
+            saveData();
+            displayWorkoutForDay(currentSelectedDayKey); 
+            alert(`Activity marked as completed.`);
+        }
+        
+        function renderDailyLog() {
+            const container = document.getElementById('dailyWorkoutLogContainer');
+            container.innerHTML = ''; 
+            Object.keys(dailyLog).sort().forEach(itemId => { 
+                const logItem = dailyLog[itemId];
+                const planItem = Object.values(USER_WORKOUT_PLAN).flat().find(p => p.id === itemId);
+                let logText = `<strong>${planItem?.setLabel || planItem?.name || planItem?.liftName || itemId}:</strong> `;
+
+                if (logItem.completed === true) {
+                    if (logItem.actualReps !== undefined && logItem.e1RMCalcFromSet !== undefined) { 
+                        logText += `${logItem.actualWeight}x${logItem.actualReps}@${logItem.actualRPE}RPE. e1RM from set: ${logItem.e1RMCalcFromSet.toFixed(1)}. Group e1RM now: ${logItem.groupE1RMAfterSet.toFixed(1)}.`;
+                    } else if (Object.keys(logItem).some(key => key.startsWith('set'))) { 
+                        let setsSummary = [];
+                        for (let i = 1; i <= (planItem?.sets || 0); i++) {
+                            if (logItem[`set${i}`]?.completed) {
+                                let setStr = `Set ${i}: ${logItem[`set${i}`].actualWeight}x${logItem[`set${i}`].actualReps}@${logItem[`set${i}`].actualRPE}RPE`;
+                                if(logItem[`set${i}`].newGroupE1RM) setStr += ` (new e1RM: ${logItem[`set${i}`].newGroupE1RM.toFixed(1)})`;
+                                setsSummary.push(setStr);
+                            }
+                        }
+                        logText += setsSummary.join('; ') || "Sets logged.";
+                    } else { 
+                        logText += `Completed at ${logItem.loggedAt || 'Logged'}.`;
+                    }
+                } else {
+                     logText += "In progress..."; 
+                }
+                const p = document.createElement('p');
+                p.style.margin = '3px 0';
+                p.innerHTML = logText;
+                container.appendChild(p);
+            });
+        }
+
+        function clearDailyLog() {
+            if(confirm("Are you sure you want to clear all logs for today? This only affects today's checkmarks and entries, not your e1RMs.")) {
+                dailyLog = {};
+                saveData(); 
+                 if (currentActiveTab === 'workoutDayTab' && currentSelectedDayKey) displayWorkoutForDay(currentSelectedDayKey); 
+                 else renderDailyLog(); 
+            }
+        }
+
+        function init() {
+            loadData(); 
+            const nav = document.getElementById('mainNav');
+            const e1rmButton = nav.querySelector('button[data-tab="e1rmTab"]'); 
+
+            Object.keys(USER_WORKOUT_PLAN).forEach(dayKey => {
+                const button = document.createElement('button');
+                button.textContent = dayKey; 
+                button.setAttribute('data-day-key', dayKey); 
+                button.setAttribute('data-tab', 'workoutDayTab'); 
+                button.onclick = () => displayWorkoutForDay(dayKey);
+                nav.insertBefore(button, e1rmButton); 
+            });
+            
+            renderE1RMTable(); 
+            document.getElementById('currentDateDisplay').textContent = new Date(todayKey).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
+            renderDailyLog(); 
+
+            const dayMap = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday AM", "Friday", "Saturday"];
+            const currentDayIndex = new Date().getDay();
+            let autoSelectDayKey = dayMap[currentDayIndex];
+            
+            if (currentDayIndex === 4 ) { 
+                 const currentHour = new Date().getHours();
+                 if (currentHour >=12 && USER_WORKOUT_PLAN["Thursday PM"]) autoSelectDayKey = "Thursday PM";
+                 else if (USER_WORKOUT_PLAN["Thursday AM"]) autoSelectDayKey = "Thursday AM";
+            }
+
+            if (USER_WORKOUT_PLAN[autoSelectDayKey]) {
+                 setTimeout(()=>displayWorkoutForDay(autoSelectDayKey),0); 
+            } else {
+                showTab('guideTab'); 
+            }
+        }
+
+        window.onclick = function(event) { 
+            const modal = document.getElementById('accessoryLogModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
